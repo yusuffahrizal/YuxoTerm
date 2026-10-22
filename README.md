@@ -17,7 +17,8 @@ YuxoTerm puts your coding agent of choice — Claude Code, Codex, Gemini CLI, Op
 
 - [Features](#features)
 - [Supported agents](#supported-agents)
-- [Getting started](#getting-started)
+- [Install](#install)
+- [Build from source](#build-from-source)
 - [Using YuxoTerm](#using-yuxoterm)
 - [Command Guard](#command-guard)
 - [How it works](#how-it-works)
@@ -72,16 +73,22 @@ Notes:
 - Antigravity's streaming format is not yet officially documented. YuxoTerm accepts both the Gemini CLI and Claude Code event formats for it.
 - Model names are listed for Claude Code. For other agents, use the agent's default or type a model ID.
 
-## Getting started
+## Install
 
-### Requirements
+1. Download the `.dmg` for your Mac from the [latest release](https://github.com/yusuffahrizal/YuxoTerm/releases/latest): `aarch64` for Apple silicon, `x64` for Intel.
+2. Open the `.dmg` and drag **YuxoTerm** into **Applications**.
+3. Install and sign in to at least one [supported agent](#supported-agents).
 
-- A recent version of macOS
-- [Rust](https://rustup.rs) (stable) and the Xcode Command Line Tools
-- [Node.js](https://nodejs.org) 18 or later
-- At least one supported agent, installed and signed in
+YuxoTerm is not yet notarized by Apple, so macOS blocks the first launch. To open it:
 
-### Build from source
+- Open **System Settings → Privacy & Security**, scroll to the message about YuxoTerm, and choose **Open Anyway**; or
+- Run `xattr -dr com.apple.quarantine /Applications/YuxoTerm.app` in a terminal.
+
+You only need to do this once per download. If you prefer not to run an unsigned build, [build it from source](#build-from-source).
+
+## Build from source
+
+You need a recent version of macOS, [Rust](https://rustup.rs) (stable) with the Xcode Command Line Tools, [Node.js](https://nodejs.org) 18 or later, and at least one supported agent.
 
 ```bash
 git clone https://github.com/yusuffahrizal/YuxoTerm.git
@@ -92,8 +99,6 @@ npm run build    # build YuxoTerm.app (and a .dmg) in src-tauri/target/release/b
 ```
 
 `npm run vendor` copies the xterm.js files from `node_modules` into `ui/vendor/`. The `dev` and `build` scripts run it for you.
-
-The app is not code-signed yet. On first launch of a downloaded build, macOS Gatekeeper may ask you to confirm it in System Settings → Privacy & Security.
 
 ## Using YuxoTerm
 
@@ -224,4 +229,4 @@ Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md) for how 
 
 ## License
 
-No license has been chosen yet. Until one is added, the code is available to read, but all rights are reserved by the author.
+[MIT](LICENSE) © 2026 Yusuf Fahrizal

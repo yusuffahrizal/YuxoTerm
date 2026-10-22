@@ -57,6 +57,17 @@ All interface text lives in `ui/i18n.js`, in both English (`en`) and Indonesian 
 
 Base flags and event formats on the agent's documentation or its `--help` output, not on memory, and note the version you checked.
 
+## Releasing
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a version tag is pushed. Maintainers:
+
+1. Set the new version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, then run `cargo build` once so `Cargo.lock` updates.
+2. Commit the change and push it to `main`; wait for CI to pass.
+3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+4. The workflow checks that the tag matches the three versions, builds Apple silicon and Intel `.dmg` files, and creates a **draft** release. Review it, edit the notes, and publish.
+
+Versions starting with `v0.` are published as pre-releases. Builds are ad-hoc signed but not notarized; notarization needs an Apple Developer account and can be added to the workflow later.
+
 ## Reporting bugs
 
 Open an issue and include:

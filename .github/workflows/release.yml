@@ -1,0 +1,74 @@
+name: Release
+
+# Push a tag such as v0.1.0 to build the app and create a draft GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the app version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for pair in \
+            "package.json:$(node -p "require('./package.json').version")" \
+            "src-tauri/tauri.conf.json:$(node -p "require('./src-tauri/tauri.conf.json').version")" \
+            "src-tauri/Cargo.toml:$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"; do
+            file="${pair%%:*}"; version="${pair#*:}"
+            if [ "$version" != "$tag" ]; then
+              echo "::error file=$file::$file has version $version but the tag is v$tag"
+              exit 1
+            fi
+          done
+
+  build:
+    needs: verify-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin # Apple silicon
+          - target: x86_64-apple-darwin # Intel
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Copy xterm.js into ui/vendor
+        run: npm run vendor
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: YuxoTerm ${{ github.ref_name }}
+          releaseBody: |
+            See the [README](https://github.com/yusuffahrizal/YuxoTerm#install) for installation steps.
+
+            This build is not notarized by Apple. On first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+          releaseDraft: true
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+          args: --target ${{ matrix.target }} --bundles dmg

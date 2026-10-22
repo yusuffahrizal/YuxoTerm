@@ -55,6 +55,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.png"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    },
+    "shortDescription": "Terminal with a built-in sidebar for coding agents"
   }
 }

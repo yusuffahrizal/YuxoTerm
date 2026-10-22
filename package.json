@@ -8,7 +8,7 @@
     "url": "git+https://github.com/yusuffahrizal/YuxoTerm.git"
   },
   "homepage": "https://github.com/yusuffahrizal/YuxoTerm",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "dev": "npm run vendor && tauri dev",
