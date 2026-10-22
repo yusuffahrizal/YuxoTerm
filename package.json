@@ -11,6 +11,7 @@
   "license": "MIT",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
+    "tauri": "tauri",
     "dev": "npm run vendor && tauri dev",
     "build": "npm run vendor && tauri build"
   },
