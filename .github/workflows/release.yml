@@ -33,8 +33,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `asset` is the architecture in the download file name (YuxoTerm_<asset>.dmg).
           - target: aarch64-apple-darwin # Apple silicon
+            asset: aarch64
           - target: x86_64-apple-darwin # Intel
+            asset: x64
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,5 +73,9 @@ jobs:
 
             This build is not notarized by Apple. On first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
           releaseDraft: true
-          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+          # Only tags like v0.2.0-beta.1 are pre-releases. GitHub's "latest release" link and the
+          # README download buttons skip pre-releases, so normal versions must not be marked as one.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Version-less file names keep releases/latest/download/YuxoTerm_<arch>.dmg valid forever.
+          releaseAssetNamePattern: YuxoTerm_${{ matrix.asset }}[ext]
           args: --target ${{ matrix.target }} --bundles dmg

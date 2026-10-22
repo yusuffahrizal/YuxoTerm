@@ -67,7 +67,9 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a ve
 3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
 4. The workflow checks that the tag matches the three versions, builds Apple silicon and Intel `.dmg` files, and creates a **draft** release. Review it, edit the notes, and publish.
 
-Versions starting with `v0.` are published as pre-releases. Builds are ad-hoc signed but not notarized; notarization needs an Apple Developer account and can be added to the workflow later.
+Release files are named `YuxoTerm_aarch64.dmg` and `YuxoTerm_x64.dmg` (no version), so the download links in the README (`releases/latest/download/…`) keep working. These links only see normal releases: GitHub's "latest release" skips drafts and pre-releases. Tags with a hyphen, such as `v0.3.0-beta.1`, are published as pre-releases; plain tags such as `v0.3.0` are normal releases.
+
+Builds are ad-hoc signed but not notarized; notarization needs an Apple Developer account and can be added to the workflow later.
 
 ## Reporting bugs
 

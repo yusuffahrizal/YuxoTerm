@@ -7,6 +7,20 @@
 
 <p align="center"><strong>A lightweight, GPU-accelerated terminal for macOS with a built-in sidebar for coding agents.</strong></p>
 
+<p align="center">
+  <a href="https://github.com/yusuffahrizal/YuxoTerm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/yusuffahrizal/YuxoTerm?include_prereleases&sort=semver&color=0f766e"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0f766e"></a>
+  <img alt="macOS" src="https://img.shields.io/badge/platform-macOS-0f766e">
+</p>
+
+<p align="center">
+  <a href="https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_aarch64.dmg"><b>⬇ Download for Apple silicon</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_x64.dmg"><b>⬇ Download for Intel</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/yusuffahrizal/YuxoTerm/releases">All releases</a>
+</p>
+
 YuxoTerm puts your coding agent of choice — Claude Code, Codex, Gemini CLI, OpenCode, Antigravity, Cursor Agent, or your own — next to your terminal panes, and lets it work *in* them. Ask the agent to open a shell inside a Docker container, tail a log, or restart a dev server, and it types into the pane you are looking at. Every action passes through **Command Guard**, a central set of rules that blocks or asks before anything risky runs.
 
 > **Status:** early development (v0.1). macOS is the primary platform. See [Platform support](#platform-support).
@@ -75,7 +89,10 @@ Notes:
 
 ## Install
 
-1. Download the `.dmg` for your Mac from the [latest release](https://github.com/yusuffahrizal/YuxoTerm/releases/latest): `aarch64` for Apple silicon, `x64` for Intel.
+1. Download the `.dmg` for your Mac from the [latest release](https://github.com/yusuffahrizal/YuxoTerm/releases/latest):
+   [**Apple silicon**](https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_aarch64.dmg) (M1 or later) or
+   [**Intel**](https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_x64.dmg).
+   Not sure which one? Choose **Apple menu → About This Mac**: "Chip: Apple M…" means Apple silicon, "Processor: Intel…" means Intel.
 2. Open the `.dmg` and drag **YuxoTerm** into **Applications**.
 3. Install and sign in to at least one [supported agent](#supported-agents).
 
