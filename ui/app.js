@@ -1,6 +1,7 @@
 // YuxoTerm UI: tabs → split panes (xterm.js on a Rust PTY) + Claude sidebar.
-import { t, applyI18n, setLanguage, resolveLanguage, LANGUAGES, ruleName, ruleNameKey, locale } from "./i18n.js";
+import { t, applyI18n, setLanguage, setKeyLabeler, resolveLanguage, LANGUAGES, ruleName, ruleNameKey, locale } from "./i18n.js";
 import { AGENTS, agentInfo, createAdapter, FORMATS } from "./agents.js";
+import { IS_MAC, matchShortcut, shortcutLabel, shortcutParts, shortcutRange } from "./keys.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -20,13 +21,15 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
+// Terminal colors: background and cursor come from the logo; the ANSI hues are the
+// same family (Tailwind 300–500) so program output sits comfortably next to the UI.
 const THEME = {
-  background: "#16171d", foreground: "#e3e4ea", cursor: "#e3e4ea", cursorAccent: "#16171d",
-  selectionBackground: "#3b3f52", selectionInactiveBackground: "#2c2f3d",
-  black: "#1d1f28", red: "#f7768e", green: "#9ece6a", yellow: "#e0af68", blue: "#7aa2f7",
-  magenta: "#bb9af7", cyan: "#7dcfff", white: "#c0caf5",
-  brightBlack: "#565f89", brightRed: "#ff8fa3", brightGreen: "#b9f27c", brightYellow: "#ffcb7a",
-  brightBlue: "#9cb8ff", brightMagenta: "#cfb2ff", brightCyan: "#a4e3ff", brightWhite: "#e3e4ea",
+  background: "#0e1116", foreground: "#f3f5f7", cursor: "#5eead4", cursorAccent: "#0e1116",
+  selectionBackground: "rgba(94, 234, 212, 0.24)", selectionInactiveBackground: "rgba(94, 234, 212, 0.12)",
+  black: "#171c24", red: "#f87171", green: "#4ade80", yellow: "#fbbf24", blue: "#60a5fa",
+  magenta: "#c084fc", cyan: "#2dd4bf", white: "#cbd5e1",
+  brightBlack: "#667384", brightRed: "#fca5a5", brightGreen: "#86efac", brightYellow: "#fcd34d",
+  brightBlue: "#93c5fd", brightMagenta: "#d8b4fe", brightCyan: "#5eead4", brightWhite: "#f3f5f7",
 };
 
 let config = null;
@@ -46,8 +49,17 @@ class Pane {
     this.id = nextId("p");
     this.el = el("div", "pane");
     this.title = "";
+    this.customTitle = "";
+    this.readOnly = false;
     this.cwd = null;
     this.alive = false;
+    // Badges in the corners of the pane: who is driving it, whether it is locked, its custom title.
+    this.tagAgent = el("span", "tag tag-agent");
+    this.tagReadOnly = el("span", "tag tag-ro");
+    this.titleChip = el("div", "pane-title-chip");
+    this.el.append(el("div", "pane-tags", null), this.titleChip);
+    $(".pane-tags", this.el).append(this.tagAgent, this.tagReadOnly);
+    this.updateTags();
     this.term = new Terminal({
       fontFamily: config.font_family,
       fontSize: config.font_size,
@@ -64,6 +76,9 @@ class Pane {
     this.term.loadAddon(new WebLinksAddon.WebLinksAddon((_, uri) => invoke("open_url", { url: uri })));
     panes.set(this.id, this);
 
+    // Read-only blocks typing and pasting but not the terminal's own replies to programs.
+    this.term.attachCustomKeyEventHandler(() => !this.readOnly);
+    this.el.addEventListener("paste", (e) => { if (this.readOnly) { e.preventDefault(); e.stopPropagation(); } }, true);
     this.term.onData((data) => {
       if (!this.alive) return;
       invoke("pty_write", { id: this.id, data });
@@ -78,6 +93,21 @@ class Pane {
       raf = requestAnimationFrame(() => this.doFit());
     });
     this.resizeObs.observe(this.el);
+  }
+
+  updateTags() {
+    this.tagAgent.textContent = `✦ ${t("tag.agent")}`;
+    this.tagReadOnly.textContent = t("tag.readOnly");
+    this.titleChip.textContent = this.customTitle;
+    this.titleChip.hidden = !this.customTitle;
+    this.el.classList.toggle("titled", !!this.customTitle);
+    this.doFit();
+  }
+
+  setReadOnly(on) {
+    this.readOnly = on;
+    this.el.classList.toggle("readonly", on);
+    this.doFit();
   }
 
   async start(cwd, initialCommand) {
@@ -152,6 +182,7 @@ class Tab {
     this.root = el("div", "tab-root");
     this.panes = [];
     this.activePane = null;
+    this.customTitle = "";
     this.chat = new Chat(this);
     this.header = el("div", "tab");
     this.header.innerHTML = `<span class="tab-title"></span><span class="tab-count"></span><button class="tab-close" data-i18n-title="tab.close">×</button>`;
@@ -174,7 +205,8 @@ class Tab {
   }
 
   // dir: "row" places the new pane right of `pane`, "col" places it below.
-  async split(pane, dir, cmd, { cwd = null, focus = true } = {}) {
+  // `before` puts the new pane left of / above `pane` instead of right of / below it.
+  async split(pane, dir, cmd, { cwd = null, focus = true, before = false } = {}) {
     cwd ||= (await invoke("pty_cwd", { id: pane.id }).catch(() => null)) || pane.cwd;
     const next = new Pane(this);
     const parent = pane.el.parentElement;
@@ -183,8 +215,9 @@ class Tab {
     pane.el.style.flex = "1 1 0";
     next.el.style.flex = "1 1 0";
     parent.replaceChild(box, pane.el);
-    box.append(pane.el, makeDivider(dir), next.el);
-    this.panes.splice(this.panes.indexOf(pane) + 1, 0, next);
+    if (before) box.append(next.el, makeDivider(dir), pane.el);
+    else box.append(pane.el, makeDivider(dir), next.el);
+    this.panes.splice(this.panes.indexOf(pane) + (before ? 0 : 1), 0, next);
     this.updateMulti();
     await next.start(cwd, cmd);
     if (focus) this.focusPane(next);
@@ -250,7 +283,7 @@ class Tab {
 
   renderHeader() {
     const p = this.activePane;
-    const title = (p && (p.title || basename(p.cwd))) || t("tab.fallback");
+    const title = this.customTitle || (p && (p.customTitle || p.title || basename(p.cwd))) || t("tab.fallback");
     $(".tab-title", this.header).textContent = title;
     this.header.title = p?.cwd || title;
     const count = $(".tab-count", this.header);
@@ -1139,10 +1172,11 @@ async function waitForCommand(pane, idleMs, timeoutMs) {
   }
 }
 
-function resolvePane(tab, paneId) {
+function resolvePane(tab, paneId, { write = false } = {}) {
   const pane = paneId ? panes.get(paneId) : tab.activePane;
   if (!pane) throw new Error(`Pane ${paneId} not found. Call list_panes to see open panes.`);
   if (!pane.alive) throw new Error(`Pane ${pane.id} is no longer running.`);
+  if (write && pane.readOnly) throw new Error(`Pane ${pane.id} is read-only: the user locked it against input. Use another pane or ask the user.`);
   return pane;
 }
 
@@ -1168,7 +1202,7 @@ const agentTools = {
 
   async run_command(tab, { command, pane_id, timeout_ms = 30000, idle_ms = 1500 }) {
     if (!command?.trim()) throw new Error("command is empty");
-    const pane = resolvePane(tab, pane_id);
+    const pane = resolvePane(tab, pane_id, { write: true });
     const buf = pane.term.buffer.active;
     const from = buf.baseY + buf.cursorY;
     agentMark(pane);
@@ -1180,7 +1214,7 @@ const agentTools = {
   },
 
   async send_keys(tab, { text = "", keys = [], pane_id, wait_ms = 800 }) {
-    const pane = resolvePane(tab, pane_id);
+    const pane = resolvePane(tab, pane_id, { write: true });
     const data = text.replace(/\r?\n/g, "\r") + keys.map(keySeq).join("");
     if (!data) throw new Error("provide text or keys");
     agentMark(pane);
@@ -1471,18 +1505,25 @@ function setupGuardAsk() {
 const DEFAULT_FONT = '"MesloLGS NF", "JetBrainsMono Nerd Font", "Symbols Nerd Font Mono", "JetBrains Mono", "SF Mono", Menlo, monospace';
 const PERMISSION_MODES = ["bypassPermissions", "acceptEdits", "auto", "dontAsk", "plan"];
 const GUARD_ACTIONS = ["allow", "ask", "deny"];
-const SHORTCUTS = [
+// [group, [[label key, [part lists…]], …]]: several part lists are shown as "a / b".
+const shortcutGroups = () => [
   ["keys.tabs", [
-    ["keys.newTab", "⌘ T"], ["keys.closePane", "⌘ W"], ["keys.closeTab", "⌘ ⇧ W"],
-    ["keys.splitRight", "⌘ D"], ["keys.splitDown", "⌘ ⇧ D"], ["keys.prevNextPane", "⌘ [ / ⌘ ]"],
-    ["keys.paneDirection", "⌘ ⌥ ← ↑ → ↓"], ["keys.prevNextTab", "⌘ ⇧ [ / ⌘ ⇧ ]"], ["keys.goToTab", "⌘ 1…9"],
+    ["keys.newTab", [shortcutParts("newTab")]], ["keys.closePane", [shortcutParts("closePane")]], ["keys.closeTab", [shortcutParts("closeTab")]],
+    ["keys.splitRight", [shortcutParts("splitRight")]], ["keys.splitDown", [shortcutParts("splitDown")]],
+    ["keys.prevNextPane", [shortcutParts("prevPane"), shortcutParts("nextPane")]],
+    ["keys.paneDirection", [shortcutRange("paneLeft", "← ↑ → ↓")]],
+    ["keys.prevNextTab", [shortcutParts("prevTab"), shortcutParts("nextTab")]],
+    ["keys.goToTab", [shortcutRange("tab1", "1…9")]],
   ]],
   ["keys.agent", [
-    ["keys.toggleSidebar", "⌘ I"], ["keys.focusPrompt", "⌘ L"], ["keys.history", "⌘ Y"],
-    ["keys.send", "↵"], ["keys.newline", "⇧ ↵"], ["keys.allow", "⌘ ↵"],
+    ["keys.toggleSidebar", [shortcutParts("sidebar")]], ["keys.focusPrompt", [shortcutParts("focusPrompt")]], ["keys.history", [shortcutParts("history")]],
+    ["keys.send", [shortcutParts("send")]], ["keys.newline", [shortcutParts("newline")]], ["keys.allow", [shortcutParts("allow")]],
   ]],
   ["keys.view", [
-    ["keys.clear", "⌘ K"], ["keys.fontSize", "⌘ = / ⌘ - / ⌘ 0"], ["keys.settings", "⌘ ,"],
+    ["keys.copy", [IS_MAC ? ["⌘", "C"] : shortcutParts("copy")]], ["keys.paste", [IS_MAC ? ["⌘", "V"] : shortcutParts("paste")]],
+    ["keys.clear", [shortcutParts("clear")]],
+    ["keys.fontSize", [shortcutParts("fontUp"), shortcutParts("fontDown"), shortcutParts("fontReset")]],
+    ["keys.settings", [shortcutParts("settings")]],
   ]],
 ];
 
@@ -1876,13 +1917,16 @@ function renderAgentList(checking = false) {
 
 function renderShortcuts() {
   const host = $("#shortcut-list");
-  host.replaceChildren(...SHORTCUTS.map(([groupKey, items]) => {
+  host.replaceChildren(...shortcutGroups().map(([groupKey, items]) => {
     const group = el("div", "kb-group");
     const card = el("div", "s-card");
-    for (const [labelKey, combo] of items) {
+    for (const [labelKey, combos] of items) {
       const row = el("div", "kb-row");
       const keys = el("span", "kb-keys");
-      for (const part of combo.split(" ")) keys.append(part === "/" ? el("span", "unit", "/") : el("kbd", null, part));
+      combos.forEach((parts, i) => {
+        if (i) keys.append(el("span", "unit", "/"));
+        for (const part of parts) keys.append(el("kbd", null, part));
+      });
       row.append(el("span", null, t(labelKey)), keys);
       card.append(row);
     }
@@ -2049,9 +2093,11 @@ function applyLanguage() {
   const lang = resolveLanguage(config.language);
   setLanguage(lang);
   applyI18n();
+  $("#ask-allow-key").textContent = shortcutLabel("allow");
   invoke("set_ui_language", { lang }).catch(() => {});
   for (const tab of tabs) {
     tab.renderHeader();
+    tab.panes.forEach((p) => p.updateTags());
     if ($(".chat-empty", tab.chat.log)) tab.chat.renderEmpty();
   }
   activeTab?.chat.syncComposer();
@@ -2068,49 +2114,218 @@ function applyLanguage() {
 // ---------------------------------------------------------------------------
 function setupKeys() {
   document.addEventListener("keydown", (e) => {
+    if (!$("#prompt-dialog").classList.contains("hidden")) {
+      if (e.key === "Escape") { e.preventDefault(); closePromptDialog(null); }
+      return;
+    }
     if (!$("#confirm").classList.contains("hidden")) {
       if (e.key === "Escape") { e.preventDefault(); closeConfirm(false); }
       return;
     }
-    const askOpen = !$("#guard-ask").classList.contains("hidden");
-    if (askOpen) {
+    const id = matchShortcut(e);
+    if (!$("#guard-ask").classList.contains("hidden")) {
       if (e.key === "Escape") { e.preventDefault(); answerAsk(false); }
-      else if (e.key === "Enter" && e.metaKey) { e.preventDefault(); answerAsk(true); }
+      else if (id === "allow") { e.preventDefault(); answerAsk(true); }
       return;
     }
     if (!$("#settings").classList.contains("hidden")) {
       if (e.key === "Escape") { e.preventDefault(); closeSettings(); }
       return;
     }
-    if (!e.metaKey || !activeTab) return;
+    if (!id || !activeTab || id === "allow") return;
+    if (!$("#ctx-menu").classList.contains("hidden")) hideContextMenu();
     const tab = activeTab, pane = tab.activePane;
-    const k = e.key.toLowerCase();
-    let handled = true;
-    if (e.altKey && e.key.startsWith("Arrow")) {
-      const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-      tab.focusDirection(...dir);
-    } else if (k === "t" && !e.shiftKey) newTab();
-    else if (k === "w" && e.shiftKey) closeTab(tab);
-    else if (k === "w") tab.closePane(pane);
-    else if (k === "d") tab.split(pane, e.shiftKey ? "col" : "row");
-    else if (e.code === "BracketLeft" && e.shiftKey) activateTab(tabs[(tabs.indexOf(tab) - 1 + tabs.length) % tabs.length]);
-    else if (e.code === "BracketRight" && e.shiftKey) activateTab(tabs[(tabs.indexOf(tab) + 1) % tabs.length]);
-    else if (e.code === "BracketLeft") tab.cyclePane(-1);
-    else if (e.code === "BracketRight") tab.cyclePane(1);
-    else if (/^[1-9]$/.test(e.key) && !e.shiftKey) activateTab(e.key === "9" ? tabs[tabs.length - 1] : tabs[Number(e.key) - 1]);
-    else if (k === "k") pane.term.clear();
-    else if (e.key === "=" || e.key === "+") zoomFont(1);
-    else if (e.key === "-") zoomFont(-1);
-    else if (e.key === "0") zoomFont(0);
-    else if (k === "i") toggleSidebar();
-    else if (k === "l") {
-      if (document.activeElement === $("#prompt")) pane.term.focus();
-      else toggleSidebar(true);
-    } else if (e.key === ",") openSettings();
-    else if (k === "y") toggleHistory();
-    else handled = false;
-    if (handled) { e.preventDefault(); e.stopPropagation(); }
+    const tabNumber = /^tab(\d)$/.exec(id);
+    if (tabNumber) {
+      activateTab(tabNumber[1] === "9" ? tabs[tabs.length - 1] : tabs[Number(tabNumber[1]) - 1]);
+    } else {
+      switch (id) {
+        case "newTab": newTab(); break;
+        case "closeTab": closeTab(tab); break;
+        case "closePane": tab.closePane(pane); break;
+        case "splitRight": tab.split(pane, "row"); break;
+        case "splitDown": tab.split(pane, "col"); break;
+        case "prevTab": activateTab(tabs[(tabs.indexOf(tab) - 1 + tabs.length) % tabs.length]); break;
+        case "nextTab": activateTab(tabs[(tabs.indexOf(tab) + 1) % tabs.length]); break;
+        case "prevPane": tab.cyclePane(-1); break;
+        case "nextPane": tab.cyclePane(1); break;
+        case "paneLeft": tab.focusDirection(-1, 0); break;
+        case "paneRight": tab.focusDirection(1, 0); break;
+        case "paneUp": tab.focusDirection(0, -1); break;
+        case "paneDown": tab.focusDirection(0, 1); break;
+        case "clear": pane.term.clear(); break;
+        case "fontUp": zoomFont(1); break;
+        case "fontDown": zoomFont(-1); break;
+        case "fontReset": zoomFont(0); break;
+        case "sidebar": toggleSidebar(); break;
+        case "focusPrompt":
+          if (document.activeElement === $("#prompt")) pane.term.focus();
+          else toggleSidebar(true);
+          break;
+        case "settings": openSettings(); break;
+        case "history": toggleHistory(); break;
+        case "copy": copySelection(pane); break;
+        case "paste": pasteInto(pane); break;
+      }
+    }
+    e.preventDefault();
+    e.stopPropagation();
   }, true);
+}
+
+// ---------------------------------------------------------------------------
+// Clipboard, context menu and title dialog
+// ---------------------------------------------------------------------------
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); } catch { await invoke("clipboard_write", { text }).catch(() => {}); }
+}
+
+function copySelection(pane) {
+  const text = pane.term.getSelection();
+  if (text) copyText(text);
+}
+
+async function pasteInto(pane) {
+  if (!pane.alive || pane.readOnly) return;
+  const text = await invoke("clipboard_read").catch(() => "");
+  // xterm adds bracketed-paste markers when the program asked for them.
+  if (text) pane.term.paste(text);
+  pane.term.focus();
+}
+
+async function resetTerminal(pane) {
+  pane.term.reset();
+  // A reset empties the screen, prompt included; ask an idle shell to draw it again.
+  const fg = await invoke("pty_foreground", { id: pane.id }).catch(() => null);
+  if (pane.alive && !pane.readOnly && fg?.shell_idle) invoke("pty_write", { id: pane.id, data: "\x0c" });
+}
+
+let ctxItems = [];
+
+function hideContextMenu() {
+  $("#ctx-menu").classList.add("hidden");
+  ctxItems = [];
+}
+
+function showContextMenu(pane, x, y) {
+  const tab = pane.tab;
+  tab.focusPane(pane, false);
+  const hint = (id) => (shortcutParts(id).length ? shortcutLabel(id) : "");
+  const nativeKey = (letter) => (IS_MAC ? `⌘${letter}` : "");
+  const hasSelection = pane.term.hasSelection();
+  const entries = [
+    hasSelection && { label: t("ctx.copy"), hint: hint("copy") || nativeKey("C"), run: () => copySelection(pane) },
+    { label: t("ctx.paste"), hint: hint("paste") || nativeKey("V"), disabled: pane.readOnly, run: () => pasteInto(pane) },
+    "-",
+    { label: t("ctx.splitRight"), hint: hint("splitRight"), run: () => tab.split(pane, "row") },
+    { label: t("ctx.splitLeft"), run: () => tab.split(pane, "row", undefined, { before: true }) },
+    { label: t("ctx.splitDown"), hint: hint("splitDown"), run: () => tab.split(pane, "col") },
+    { label: t("ctx.splitUp"), run: () => tab.split(pane, "col", undefined, { before: true }) },
+    "-",
+    { label: t("ctx.clear"), hint: hint("clear"), run: () => pane.term.clear() },
+    { label: t("ctx.reset"), run: () => resetTerminal(pane) },
+    { label: t("ctx.readOnly"), checked: pane.readOnly, run: () => pane.setReadOnly(!pane.readOnly) },
+    "-",
+    { label: t("ctx.changeTabTitle"), run: () => renameTab(tab) },
+    { label: t("ctx.changeTerminalTitle"), run: () => renamePane(pane) },
+  ].filter(Boolean);
+
+  const menu = $("#ctx-menu");
+  menu.replaceChildren();
+  ctxItems = [];
+  const checkable = entries.some((en) => en !== "-" && "checked" in en);
+  for (const en of entries) {
+    if (en === "-") { menu.append(el("div", "ctx-sep")); continue; }
+    const b = el("button", "ctx-item");
+    b.type = "button";
+    b.setAttribute("role", "menuitem");
+    b.disabled = !!en.disabled;
+    if (checkable) b.append(el("span", "ctx-check", en.checked ? "✓" : ""));
+    b.append(el("span", "ctx-label", en.label), el("span", "ctx-hint", en.hint ?? ""));
+    b.addEventListener("click", () => { hideContextMenu(); en.run(); if (!$("#prompt-dialog").offsetParent) pane.term.focus(); });
+    menu.append(b);
+    if (!en.disabled) ctxItems.push(b);
+  }
+  menu.classList.remove("hidden");
+  // Keep the menu inside the window.
+  const r = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(6, Math.min(x, window.innerWidth - r.width - 6))}px`;
+  menu.style.top = `${Math.max(6, Math.min(y, window.innerHeight - r.height - 6))}px`;
+}
+
+function setupContextMenu() {
+  const menu = $("#ctx-menu");
+  document.addEventListener("contextmenu", (e) => {
+    const paneEl = e.target.closest(".pane");
+    if (paneEl) {
+      e.preventDefault();
+      const pane = [...panes.values()].find((p) => p.el === paneEl);
+      if (pane) showContextMenu(pane, e.clientX, e.clientY);
+      return;
+    }
+    hideContextMenu();
+    // Keep the system menu for text fields and selected text; hide the WebView's own (Reload…).
+    const editable = e.target.closest("input, textarea, [contenteditable]");
+    if (!editable && !window.getSelection()?.toString()) e.preventDefault();
+  });
+  document.addEventListener("mousedown", (e) => { if (!e.target.closest("#ctx-menu")) hideContextMenu(); }, true);
+  window.addEventListener("blur", hideContextMenu);
+  window.addEventListener("resize", hideContextMenu);
+  menu.addEventListener("keydown", (e) => {
+    const i = ctxItems.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); ctxItems[(i + 1) % ctxItems.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); ctxItems[(i - 1 + ctxItems.length) % ctxItems.length]?.focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); hideContextMenu(); activeTab?.activePane?.term.focus(); }
+  });
+  // Keys typed while the menu is open belong to it, not to the terminal underneath.
+  document.addEventListener("keydown", (e) => {
+    if (menu.classList.contains("hidden") || e.metaKey || e.ctrlKey) return;
+    if (["ArrowDown", "ArrowUp"].includes(e.key) && !menu.contains(document.activeElement)) { e.preventDefault(); ctxItems[0]?.focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); hideContextMenu(); }
+  }, true);
+}
+
+let promptResolve = null;
+function promptDialog({ title, body, value = "", placeholder = "" }) {
+  $("#pd-title").textContent = title;
+  $("#pd-body").textContent = body;
+  const input = $("#pd-input");
+  input.value = value;
+  input.placeholder = placeholder;
+  $("#prompt-dialog").classList.remove("hidden");
+  input.focus();
+  input.select();
+  return new Promise((resolve) => { promptResolve = resolve; });
+}
+
+function closePromptDialog(result) {
+  $("#prompt-dialog").classList.add("hidden");
+  promptResolve?.(result);
+  promptResolve = null;
+  activeTab?.activePane?.term.focus();
+}
+
+function setupPromptDialog() {
+  $("#pd-ok").addEventListener("click", () => closePromptDialog($("#pd-input").value.trim()));
+  $("#pd-cancel").addEventListener("click", () => closePromptDialog(null));
+  $("#pd-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); closePromptDialog($("#pd-input").value.trim()); }
+  });
+}
+
+async function renameTab(tab) {
+  const value = await promptDialog({ title: t("title.tab"), body: t("title.hint"), value: tab.customTitle, placeholder: t("title.placeholder") });
+  if (value === null) return;
+  tab.customTitle = value;
+  tab.renderHeader();
+}
+
+async function renamePane(pane) {
+  const value = await promptDialog({ title: t("title.terminal"), body: t("title.hint"), value: pane.customTitle, placeholder: t("title.placeholder") });
+  if (value === null) return;
+  pane.customTitle = value;
+  pane.updateTags();
+  pane.tab.renderHeader();
 }
 
 // ---------------------------------------------------------------------------
@@ -2133,6 +2348,7 @@ async function preloadFonts() {
 }
 
 async function main() {
+  setKeyLabeler(shortcutLabel);
   config = await invoke("get_config");
   applyLanguage();
   await preloadFonts();
@@ -2160,6 +2376,8 @@ async function main() {
   await listen("agent-tool", (e) => runAgentTool(e.payload));
   setupSettings();
   setupConfirm();
+  setupPromptDialog();
+  setupContextMenu();
   setupKeys();
   window.addEventListener("resize", () => activeTab?.panes.forEach((p) => p.doFit()));
   await newTab(null);

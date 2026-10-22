@@ -35,6 +35,7 @@ Keep pull requests focused on one change, and describe *why* the change is neede
 - **JavaScript:** modern ES modules with no framework. Keep DOM helpers small and local. Escape any text that comes from an agent or the shell before inserting it as HTML (see `esc()` and `renderMarkdown()` in `ui/app.js`).
 - **Comments:** explain *why* something is done when it isn't obvious from the code. Match the density of the surrounding code.
 - **Commands that read files or run processes** go off the UI thread: use an `async` Tauri command with `spawn_blocking`.
+- **Keyboard shortcuts** are defined once in `ui/keys.js`, with a macOS (⌘) and a non-macOS (Ctrl+Shift) combination. Never hard-code ⌘ in a string: write `{kb.<id>}` in `ui/i18n.js` and it is filled in for the platform. Keep plain `Ctrl+<key>` free for programs in the terminal.
 
 ## User-facing text
 

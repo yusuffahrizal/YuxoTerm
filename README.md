@@ -33,7 +33,7 @@ YuxoTerm puts your coding agent of choice — Claude Code, Codex, Gemini CLI, Op
 
 **Terminal**
 - GPU-accelerated rendering (xterm.js with WebGL) on a native Rust PTY backend
-- Tabs, plus split panes inside each tab (right and down), with draggable dividers and keyboard navigation
+- Tabs, plus split panes inside each tab (right, left, down and up), with draggable dividers, keyboard navigation and a right-click menu
 - Truecolor, clickable links, and your installed fonts, including Nerd Fonts for prompt icons
 - Small footprint: the app bundle is about 6 MB; it uses the system WebView instead of Electron
 
@@ -114,21 +114,29 @@ Switching to a different agent starts a new conversation, because each agent kee
 
 ### Keyboard shortcuts
 
-| Action | Shortcut |
-|---|---|
-| New tab / close tab | ⌘T / ⌘⇧W |
-| Split right / split down | ⌘D / ⌘⇧D |
-| Close pane | ⌘W |
-| Previous / next pane | ⌘[ / ⌘] |
-| Move to pane in a direction | ⌘⌥ + arrow keys |
-| Previous / next tab, go to tab 1–9 | ⌘⇧[ / ⌘⇧], ⌘1…⌘9 |
-| Show or hide the agent sidebar | ⌘I |
-| Focus the message box / back to the terminal | ⌘L |
-| Conversation history | ⌘Y |
-| Allow a pending action | ⌘↵ |
-| Clear pane | ⌘K |
-| Bigger / smaller / reset text | ⌘= / ⌘- / ⌘0 |
-| Settings | ⌘, |
+On macOS the shortcuts use ⌘. On other platforms plain `Ctrl+<key>` belongs to the program running in the terminal (`Ctrl+C`, `Ctrl+D`, readline…), so YuxoTerm uses `Ctrl+Shift` instead, as GNOME Terminal and Ghostty do on Linux.
+
+| Action | macOS | Linux |
+|---|---|---|
+| New tab / close tab | ⌘T / ⇧⌘W | Ctrl+Shift+T / Ctrl+Shift+Alt+W |
+| Split right / split down | ⌘D / ⇧⌘D | Ctrl+Shift+D / Ctrl+Shift+Alt+D |
+| Close pane | ⌘W | Ctrl+Shift+W |
+| Previous / next pane | ⌘[ / ⌘] | Ctrl+Shift+[ / ] |
+| Move to the pane in a direction | ⌥⌘ + arrow keys | Ctrl+Shift+Alt + arrow keys |
+| Previous / next tab | ⇧⌘[ / ⇧⌘] | Ctrl+PgUp / Ctrl+PgDn |
+| Go to tab 1–9 | ⌘1 … ⌘9 | Alt+1 … Alt+9 |
+| Show or hide the agent sidebar | ⌘I | Ctrl+Shift+I |
+| Focus the message box / back to the terminal | ⌘L | Ctrl+Shift+L |
+| Conversation history | ⌘Y | Ctrl+Shift+Y |
+| Allow a pending action | ⌘↵ | Ctrl+Enter |
+| Copy / paste | ⌘C / ⌘V | Ctrl+Shift+C / Ctrl+Shift+V |
+| Clear pane | ⌘K | Ctrl+Shift+K |
+| Bigger / smaller / reset text | ⌘= / ⌘- / ⌘0 | Ctrl+Shift+= / - / 0 |
+| Settings | ⌘, | Ctrl+, |
+
+### Terminal context menu
+
+Right-click a pane for copy and paste, splits in all four directions (right, left, down, up), clear screen, **reset terminal**, **read-only** mode, and custom **tab** and **terminal** titles. A read-only pane ignores typing and pasting, and agents can't type into it. Panes show a badge when they are read-only, have a custom title, or are being driven by an agent.
 
 The full list is also in Settings → Keyboard shortcuts.
 
@@ -194,7 +202,7 @@ The folder is readable only by your user account. YuxoTerm changes files outside
 |---|---|
 | macOS on Apple silicon | Supported and tested |
 | macOS on Intel | Should work; untested |
-| Linux | Builds; terminal features should work, but this is untested |
+| Linux | Builds, and shortcuts and the clipboard are implemented for it, but it is untested |
 | Windows | Not supported (agent integration relies on Unix sockets) |
 
 ## Project structure
@@ -203,6 +211,7 @@ The folder is readable only by your user account. YuxoTerm changes files outside
 src-tauri/src/
   main.rs       App setup, native menu, and the --guard-hook / --mcp-server modes
   pty.rs        One PTY and shell per pane: spawn, write, resize, cwd, foreground process
+  clipboard.rs  System clipboard read/write for the context menu and Ctrl+Shift+C/V
   agents.rs     Runs each agent headlessly: flags, resume, terminal tools, guard hook
   guard.rs      Command Guard rules, the pre-tool hook, the approval broker socket
   mcp.rs        Stdio MCP server for the terminal tools; forwards calls to the app
@@ -212,7 +221,8 @@ src-tauri/src/
 ui/
   index.html    Markup
   style.css     Styles
-  app.js        Tabs, panes, sidebar, history, settings, terminal tools
+  app.js        Tabs, panes, context menu, sidebar, history, settings, terminal tools
+  keys.js       Keyboard shortcuts per platform (⌘ on macOS, Ctrl+Shift elsewhere)
   agents.js     Agent list and output adapters
   i18n.js       English and Indonesian strings
 scripts/

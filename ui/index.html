@@ -85,7 +85,7 @@
         <button data-section="agents"><span class="nav-ico spark">✦</span><span data-i18n="nav.agents"></span></button>
         <button data-section="defaults"><span class="nav-ico">◎</span><span data-i18n="nav.defaults"></span></button>
         <button data-section="guard"><span class="nav-ico">⛨</span><span data-i18n="nav.guard"></span></button>
-        <button data-section="shortcuts"><span class="nav-ico">⌘</span><span data-i18n="nav.shortcuts"></span></button>
+        <button data-section="shortcuts"><span class="nav-ico">⌨︎</span><span data-i18n="nav.shortcuts"></span></button>
       </nav>
       <div class="settings-main">
         <div class="settings-top">
@@ -279,7 +279,7 @@
       <div class="row-btns end">
         <span class="ask-queue" id="ask-queue"></span>
         <button id="ask-deny" class="danger-btn"><span data-i18n="ask.deny"></span> <kbd>Esc</kbd></button>
-        <button id="ask-allow" class="primary-btn"><span data-i18n="ask.allow"></span> <kbd>⌘↵</kbd></button>
+        <button id="ask-allow" class="primary-btn"><span data-i18n="ask.allow"></span> <kbd id="ask-allow-key"></kbd></button>
       </div>
     </div>
   </div>
@@ -295,6 +295,22 @@
       </div>
     </div>
   </div>
+
+  <!-- Rename dialog -->
+  <div id="prompt-dialog" class="modal hidden">
+    <div class="modal-card confirm-card" role="dialog" aria-labelledby="pd-title">
+      <div class="confirm-title" id="pd-title"></div>
+      <div class="confirm-body" id="pd-body"></div>
+      <input id="pd-input" class="pd-input" spellcheck="false" aria-labelledby="pd-title" />
+      <div class="row-btns end">
+        <button id="pd-cancel" class="ghost-btn" data-i18n="dialog.cancel"></button>
+        <button id="pd-ok" class="primary-btn" data-i18n="dialog.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terminal context menu -->
+  <div id="ctx-menu" class="ctx-menu hidden" role="menu"></div>
 
   <div id="toasts"></div>
 

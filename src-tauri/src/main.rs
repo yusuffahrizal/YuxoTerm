@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agents;
+mod clipboard;
 mod config;
 mod guard;
 mod history;
@@ -52,6 +53,8 @@ fn main() {
             pty::pty_kill,
             pty::pty_cwd,
             pty::pty_foreground,
+            clipboard::clipboard_read,
+            clipboard::clipboard_write,
             agents::agent_send,
             agents::agent_cancel,
             agents::agents_status,

@@ -5,16 +5,16 @@
 const STRINGS = {
   en: {
     // Title bar & tabs
-    "tab.new": "New tab (⌘T)",
-    "tab.close": "Close tab (⌘⇧W)",
+    "tab.new": "New tab ({kb.newTab})",
+    "tab.close": "Close tab ({kb.closeTab})",
     "tab.fallback": "Terminal",
     "tab.panes": "{n} panes",
-    "titlebar.claude": "Show or hide the agent (⌘I)",
-    "titlebar.settings": "Settings (⌘,)",
+    "titlebar.claude": "Show or hide the agent ({kb.sidebar})",
+    "titlebar.settings": "Settings ({kb.settings})",
 
     // Sidebar
     "sb.history": "History",
-    "sb.historyTip": "Past conversations (⌘Y)",
+    "sb.historyTip": "Past conversations ({kb.history})",
     "sb.newChat": "New chat",
     "sb.newChatTip": "Start a new conversation in this tab",
     "sb.cwdTip": "The agent works in this folder",
@@ -25,7 +25,7 @@ const STRINGS = {
     "composer.context": "Include terminal output",
     "composer.contextTip": "Send the last {n} lines of the active pane with your message",
     "composer.send": "Send",
-    "composer.sendTip": "Send (↵) · New line (⇧↵)",
+    "composer.sendTip": "Send ({kb.send}) · New line ({kb.newline})",
     "composer.stop": "Stop",
     "composer.agentTip": "Agent, model, effort and thinking for this tab",
 
@@ -123,7 +123,7 @@ const STRINGS = {
     "general.font": "Font",
     "general.fontDesc": "Comma-separated, in order of preference. Nerd Fonts are supported.",
     "general.fontSize": "Font size",
-    "general.fontSizeDesc": "You can also use ⌘= and ⌘- in a pane.",
+    "general.fontSizeDesc": "You can also use {kb.fontUp} and {kb.fontDown} in a pane.",
     "general.shell": "Shell",
     "general.shellDesc": "Applies to new panes.",
     "general.shellPlaceholder": "Login shell ($SHELL)",
@@ -289,18 +289,38 @@ const STRINGS = {
     "defaults.agent": "Agent",
     "defaults.modelFor": "Model for {agent}",
     "defaults.customModelDesc": "Leave empty to use {agent}'s default model.",
+    "ctx.copy": "Copy",
+    "ctx.paste": "Paste",
+    "ctx.splitRight": "Split Right",
+    "ctx.splitLeft": "Split Left",
+    "ctx.splitDown": "Split Down",
+    "ctx.splitUp": "Split Up",
+    "ctx.clear": "Clear Screen",
+    "ctx.reset": "Reset Terminal",
+    "ctx.readOnly": "Terminal Read-only",
+    "ctx.changeTabTitle": "Change Tab Title…",
+    "ctx.changeTerminalTitle": "Change Terminal Title…",
+    "title.tab": "Tab title",
+    "title.terminal": "Terminal title",
+    "title.hint": "Leave empty to use the automatic title.",
+    "title.placeholder": "Automatic",
+    "tag.agent": "Agent",
+    "tag.readOnly": "Read-only",
+    "dialog.save": "Save",
+    "keys.copy": "Copy selection",
+    "keys.paste": "Paste",
   },
 
   id: {
-    "tab.new": "Tab baru (⌘T)",
-    "tab.close": "Tutup tab (⌘⇧W)",
+    "tab.new": "Tab baru ({kb.newTab})",
+    "tab.close": "Tutup tab ({kb.closeTab})",
     "tab.fallback": "Terminal",
     "tab.panes": "{n} pane",
-    "titlebar.claude": "Tampilkan atau sembunyikan agent (⌘I)",
-    "titlebar.settings": "Pengaturan (⌘,)",
+    "titlebar.claude": "Tampilkan atau sembunyikan agent ({kb.sidebar})",
+    "titlebar.settings": "Pengaturan ({kb.settings})",
 
     "sb.history": "Riwayat",
-    "sb.historyTip": "Percakapan sebelumnya (⌘Y)",
+    "sb.historyTip": "Percakapan sebelumnya ({kb.history})",
     "sb.newChat": "Chat baru",
     "sb.newChatTip": "Mulai percakapan baru di tab ini",
     "sb.cwdTip": "Agent bekerja di folder ini",
@@ -311,7 +331,7 @@ const STRINGS = {
     "composer.context": "Sertakan output terminal",
     "composer.contextTip": "Kirim {n} baris terakhir dari pane aktif bersama pesan Anda",
     "composer.send": "Kirim",
-    "composer.sendTip": "Kirim (↵) · Baris baru (⇧↵)",
+    "composer.sendTip": "Kirim ({kb.send}) · Baris baru ({kb.newline})",
     "composer.stop": "Hentikan",
     "composer.agentTip": "Agent, model, effort, dan thinking untuk tab ini",
 
@@ -403,7 +423,7 @@ const STRINGS = {
     "general.font": "Font",
     "general.fontDesc": "Pisahkan dengan koma, urut sesuai prioritas. Nerd Font didukung.",
     "general.fontSize": "Ukuran font",
-    "general.fontSizeDesc": "Bisa juga dengan ⌘= dan ⌘- di pane.",
+    "general.fontSizeDesc": "Bisa juga dengan {kb.fontUp} dan {kb.fontDown} di pane.",
     "general.shell": "Shell",
     "general.shellDesc": "Berlaku untuk pane baru.",
     "general.shellPlaceholder": "Shell login ($SHELL)",
@@ -563,6 +583,26 @@ const STRINGS = {
     "defaults.agent": "Agent",
     "defaults.modelFor": "Model untuk {agent}",
     "defaults.customModelDesc": "Kosongkan untuk memakai model bawaan {agent}.",
+    "ctx.copy": "Salin",
+    "ctx.paste": "Tempel",
+    "ctx.splitRight": "Bagi ke Kanan",
+    "ctx.splitLeft": "Bagi ke Kiri",
+    "ctx.splitDown": "Bagi ke Bawah",
+    "ctx.splitUp": "Bagi ke Atas",
+    "ctx.clear": "Bersihkan Layar",
+    "ctx.reset": "Reset Terminal",
+    "ctx.readOnly": "Terminal Hanya-baca",
+    "ctx.changeTabTitle": "Ubah Judul Tab…",
+    "ctx.changeTerminalTitle": "Ubah Judul Terminal…",
+    "title.tab": "Judul tab",
+    "title.terminal": "Judul terminal",
+    "title.hint": "Kosongkan untuk memakai judul otomatis.",
+    "title.placeholder": "Otomatis",
+    "tag.agent": "Agent",
+    "tag.readOnly": "Hanya-baca",
+    "dialog.save": "Simpan",
+    "keys.copy": "Salin teks terpilih",
+    "keys.paste": "Tempel",
   },
 };
 
@@ -587,8 +627,16 @@ export function setLanguage(next) {
 export const currentLanguage = () => lang;
 export const locale = () => (lang === "id" ? "id-ID" : "en-US");
 
+// Shortcut labels depend on the platform (⌘ on macOS, Ctrl+Shift elsewhere), so strings
+// refer to them as {kb.<id>} and the labeler fills them in.
+let keyLabeler = () => "";
+export function setKeyLabeler(fn) {
+  keyLabeler = fn;
+}
+
 export function t(key, vars) {
   let s = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+  s = s.replace(/\{kb\.(\w+)\}/g, (_, id) => keyLabeler(id));
   if (vars) s = s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`));
   return s;
 }
