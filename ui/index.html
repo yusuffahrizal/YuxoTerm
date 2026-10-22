@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YuxoTerm</title>
+  <link rel="stylesheet" href="vendor/xterm.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="titlebar" data-tauri-drag-region>
+      <div class="traffic-space" data-tauri-drag-region></div>
+      <div id="tabs"></div>
+      <button id="new-tab" class="icon-btn" data-i18n-title="tab.new">+</button>
+      <div class="spacer" data-tauri-drag-region></div>
+      <button id="toggle-ai" class="pill" data-i18n-title="titlebar.claude"><span class="spark">✦</span> <span data-i18n="titlebar.agent"></span></button>
+      <button id="open-settings" class="icon-btn" data-i18n-title="titlebar.settings">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </header>
+
+    <main>
+      <section id="workspace"></section>
+      <div id="sidebar-resizer"></div>
+      <aside id="sidebar">
+        <div class="sb-head">
+          <div class="sb-title"><span class="spark">✦</span> <span id="sb-agent-name">Claude</span></div>
+          <button id="history-btn" class="ghost-btn" data-i18n="sb.history" data-i18n-title="sb.historyTip"></button>
+          <button id="new-chat" class="ghost-btn" data-i18n="sb.newChat" data-i18n-title="sb.newChatTip"></button>
+        </div>
+        <div class="sb-cwd" id="sb-cwd" data-i18n-title="sb.cwdTip">~</div>
+        <div id="chat-host"></div>
+        <div id="history-panel" class="hidden">
+          <div class="hp-head">
+            <input id="history-search" data-i18n-placeholder="history.search" spellcheck="false" />
+            <button id="history-close" class="icon-btn" data-i18n-title="history.close">×</button>
+          </div>
+          <div class="hp-filters">
+            <button data-scope="cwd" class="chip active" data-i18n="history.thisFolder"></button>
+            <button data-scope="all" class="chip" data-i18n="history.allFolders"></button>
+            <label class="check"><input type="checkbox" id="history-app-only" /> <span data-i18n="history.appOnly"></span></label>
+          </div>
+          <div id="history-list"></div>
+        </div>
+        <div id="agent-menu" class="agent-menu hidden" role="menu">
+          <div class="am-title" data-i18n="agent.agent"></div>
+          <div id="am-agents" class="am-agents"></div>
+          <div class="am-sep"></div>
+          <div class="am-title" data-i18n="agent.model"></div>
+          <div id="am-models"></div>
+          <input id="am-model-input" class="am-model-input" spellcheck="false" />
+          <div class="am-sep"></div>
+          <div class="am-row" id="am-effort-row">
+            <span><span data-i18n="agent.effort"></span> <span class="am-dim" id="am-effort-label"></span></span>
+            <div class="effort-track" id="am-effort" role="slider" tabindex="0" aria-label="Effort"></div>
+          </div>
+          <div class="am-row" id="am-thinking-row">
+            <span data-i18n="agent.thinking"></span>
+            <div class="seg small" id="am-thinking"></div>
+          </div>
+        </div>
+        <div class="composer">
+          <div id="status-line" class="status-line hidden"><span class="dot"></span><span id="status-text"></span></div>
+          <textarea id="prompt" rows="3"></textarea>
+          <div class="composer-row">
+            <label class="check" id="ctx-label">
+              <input type="checkbox" id="ctx-toggle" /> <span data-i18n="composer.context"></span>
+            </label>
+            <div class="spacer"></div>
+            <button id="agent-btn" class="agent-btn" data-i18n-title="composer.agentTip"><span id="agent-label"></span><span class="chev">⌄</span></button>
+            <button id="send" class="primary-btn" data-i18n-title="composer.sendTip"></button>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings" class="modal hidden">
+    <div class="modal-card settings-card" role="dialog" aria-labelledby="settings-heading">
+      <nav class="settings-nav">
+        <div class="settings-title" id="settings-heading" data-i18n="settings.title"></div>
+        <button data-section="general" class="active"><span class="nav-ico">⚙︎</span><span data-i18n="nav.general"></span></button>
+        <button data-section="agents"><span class="nav-ico spark">✦</span><span data-i18n="nav.agents"></span></button>
+        <button data-section="defaults"><span class="nav-ico">◎</span><span data-i18n="nav.defaults"></span></button>
+        <button data-section="guard"><span class="nav-ico">⛨</span><span data-i18n="nav.guard"></span></button>
+        <button data-section="shortcuts"><span class="nav-ico">⌘</span><span data-i18n="nav.shortcuts"></span></button>
+      </nav>
+      <div class="settings-main">
+        <div class="settings-top">
+          <h2 id="settings-section-title"></h2>
+          <span id="settings-saved" class="saved-badge" data-i18n="settings.saved"></span>
+          <button id="settings-close" class="icon-btn" data-i18n-title="settings.close">×</button>
+        </div>
+        <div class="settings-body">
+
+          <!-- General -->
+          <section data-panel="general" data-title="general.title">
+            <div class="s-group">
+              <div class="s-group-title" data-i18n="general.languageGroup"></div>
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="general.language"></div><div class="s-desc" data-i18n="general.languageDesc"></div></div>
+                  <div class="s-control"><select id="set-language"></select></div>
+                </div>
+              </div>
+            </div>
+            <div class="s-group">
+              <div class="s-group-title" data-i18n="general.terminalGroup"></div>
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="general.font"></div><div class="s-desc" data-i18n="general.fontDesc"></div></div>
+                  <div class="s-control wide"><input id="set-font-family" spellcheck="false" /></div>
+                </div>
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="general.fontSize"></div><div class="s-desc" data-i18n="general.fontSizeDesc"></div></div>
+                  <div class="s-control"><div class="stepper"><button data-step="-1">−</button><input id="set-font-size" type="number" min="8" max="32" /><button data-step="1">+</button></div></div>
+                </div>
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="general.shell"></div><div class="s-desc" data-i18n="general.shellDesc"></div></div>
+                  <div class="s-control wide"><input id="set-shell" spellcheck="false" data-i18n-placeholder="general.shellPlaceholder" /></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Agents -->
+          <section data-panel="agents" data-title="agents.title" class="hidden">
+            <div class="s-group">
+              <div class="s-group-head">
+                <div class="s-group-title" data-i18n="agents.listGroup"></div>
+                <button id="agents-refresh" class="link-btn" data-i18n="agents.checkAgain"></button>
+              </div>
+              <p class="s-desc s-group-desc" data-i18n="agents.listDesc"></p>
+              <div class="s-card" id="agent-list"></div>
+            </div>
+            <div class="s-group">
+              <div class="s-group-title" data-i18n="access.group"></div>
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="access.mode"></div><div class="s-desc" data-i18n="access.modeDesc"></div></div>
+                  <div class="s-control"><select id="set-permission"></select></div>
+                </div>
+                <div class="s-note" id="perm-desc"></div>
+              </div>
+            </div>
+            <div class="s-group">
+              <div class="s-group-title" data-i18n="context.group"></div>
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="context.include"></div><div class="s-desc" data-i18n="context.includeDesc"></div></div>
+                  <div class="s-control"><button class="switch" id="set-include-ctx" role="switch" aria-checked="false"><span></span></button></div>
+                </div>
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="context.lines"></div></div>
+                  <div class="s-control"><input id="set-ctx-lines" type="number" min="10" max="2000" class="num" /></div>
+                </div>
+                <div class="s-row stack">
+                  <div class="s-label"><div data-i18n="context.instructions"></div><div class="s-desc" data-i18n="context.instructionsDesc"></div></div>
+                  <textarea id="set-instructions" rows="3" data-i18n-placeholder="context.instructionsPlaceholder"></textarea>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- New chat defaults -->
+          <section data-panel="defaults" data-title="defaults.title" class="hidden">
+            <p class="s-intro" data-i18n="defaults.intro"></p>
+            <div class="s-group">
+              <div class="s-group-title" data-i18n="defaults.agent"></div>
+              <div class="s-card"><div id="def-agents" class="model-list"></div></div>
+            </div>
+            <div class="s-group">
+              <div class="s-group-title" id="def-model-title"></div>
+              <div class="s-card">
+                <div id="def-models" class="model-list"></div>
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="defaults.customModel"></div><div class="s-desc" id="def-custom-desc"></div></div>
+                  <div class="s-control wide"><input id="def-custom-model" spellcheck="false" class="mono" data-i18n-placeholder="defaults.customModelPlaceholder" /></div>
+                </div>
+              </div>
+            </div>
+            <div class="s-group" id="def-reasoning">
+              <div class="s-card">
+                <div class="s-row stack" id="def-effort-row">
+                  <div class="s-label"><div data-i18n="defaults.effort"></div><div class="s-desc" data-i18n="defaults.effortDesc"></div></div>
+                  <div class="seg" id="def-effort"></div>
+                </div>
+                <div class="s-row stack" id="def-thinking-row">
+                  <div class="s-label"><div data-i18n="defaults.thinking"></div><div class="s-desc" data-i18n="defaults.thinkingDesc"></div></div>
+                  <div class="seg" id="def-thinking"></div>
+                </div>
+                <div class="s-row" id="def-budget-row">
+                  <div class="s-label"><div data-i18n="defaults.budget"></div><div class="s-desc" data-i18n="defaults.budgetDesc"></div></div>
+                  <div class="s-control"><input id="def-budget" type="number" min="0" step="1024" class="num" data-i18n-placeholder="defaults.budgetPlaceholder" /></div>
+                </div>
+              </div>
+            </div>
+            <div class="s-actions"><button id="def-apply" class="ghost-btn" data-i18n="defaults.applyAll"></button></div>
+          </section>
+
+          <!-- Command Guard -->
+          <section data-panel="guard" data-title="guard.title" class="hidden">
+            <div class="s-group">
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div class="strong" data-i18n="guard.enabled"></div><div class="s-desc" data-i18n="guard.enabledDesc"></div></div>
+                  <div class="s-control"><button class="switch" id="guard-enabled" role="switch" aria-checked="false"><span></span></button></div>
+                </div>
+              </div>
+            </div>
+            <div class="s-group guard-dependent">
+              <div class="s-group-title" data-i18n="guard.behaviorGroup"></div>
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="guard.default"></div></div>
+                  <div class="seg" id="guard-default"></div>
+                </div>
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="guard.timeout"></div><div class="s-desc" data-i18n="guard.timeoutDesc"></div></div>
+                  <div class="s-control"><input id="guard-timeout" type="number" min="10" max="3600" class="num" /><span class="unit" data-i18n="guard.seconds"></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="s-group guard-dependent">
+              <div class="s-group-title" data-i18n="guard.rulesGroup"></div>
+              <p class="s-desc s-group-desc" data-i18n="guard.rulesDesc"></p>
+              <div class="s-card rules-card">
+                <div id="rules"></div>
+              </div>
+              <div class="s-error hidden" id="guard-error"></div>
+              <div class="s-actions">
+                <button id="rule-add" class="ghost-btn">+ <span data-i18n="guard.addRule"></span></button>
+                <button id="guard-reset" class="ghost-btn" data-i18n="guard.restore"></button>
+              </div>
+            </div>
+            <div class="s-group guard-dependent">
+              <div class="s-group-title" data-i18n="guard.testGroup"></div>
+              <div class="s-card">
+                <div class="s-row guard-test">
+                  <select id="test-tool"><option>Bash</option><option>Write</option><option>Edit</option><option>Read</option><option>WebFetch</option></select>
+                  <input id="test-subject" class="mono" spellcheck="false" data-i18n-placeholder="guard.testPlaceholder" />
+                  <span id="test-result" class="badge">—</span>
+                </div>
+              </div>
+            </div>
+            <div class="s-group">
+              <div class="s-group-title" data-i18n="guard.globalGroup"></div>
+              <div class="s-card">
+                <div class="s-row">
+                  <div class="s-label"><div data-i18n="guard.global"></div><div class="s-desc" id="guard-global-desc"></div></div>
+                  <div class="s-control"><button class="switch" id="guard-global" role="switch" aria-checked="false"><span></span></button></div>
+                </div>
+                <details class="s-files">
+                  <summary data-i18n="guard.files"></summary>
+                  <div class="mono s-desc" id="guard-paths"></div>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <!-- Shortcuts -->
+          <section data-panel="shortcuts" data-title="keys.title" class="hidden">
+            <div id="shortcut-list"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guard approval -->
+  <div id="guard-ask" class="modal hidden">
+    <div class="modal-card ask-card" role="alertdialog" aria-labelledby="ask-title">
+      <div class="ask-title" id="ask-title" data-i18n="ask.title"></div>
+      <div class="ask-meta" id="ask-meta"></div>
+      <pre class="ask-subject" id="ask-subject"></pre>
+      <div class="ask-details" id="ask-details"></div>
+      <div class="row-btns end">
+        <span class="ask-queue" id="ask-queue"></span>
+        <button id="ask-deny" class="danger-btn"><span data-i18n="ask.deny"></span> <kbd>Esc</kbd></button>
+        <button id="ask-allow" class="primary-btn"><span data-i18n="ask.allow"></span> <kbd>⌘↵</kbd></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog -->
+  <div id="confirm" class="modal hidden">
+    <div class="modal-card confirm-card" role="alertdialog" aria-labelledby="confirm-title">
+      <div class="confirm-title" id="confirm-title"></div>
+      <div class="confirm-body" id="confirm-body"></div>
+      <div class="row-btns end">
+        <button id="confirm-cancel" class="ghost-btn" data-i18n="dialog.cancel"></button>
+        <button id="confirm-ok" class="primary-btn"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script src="vendor/addon-web-links.js"></script>
+  <script src="vendor/addon-webgl.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

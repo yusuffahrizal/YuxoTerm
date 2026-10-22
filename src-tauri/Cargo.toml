@@ -1,0 +1,26 @@
+[package]
+name = "yuxoterm"
+version = "0.1.0"
+description = "A lightweight, GPU-accelerated terminal with a built-in sidebar for coding agents"
+edition = "2021"
+publish = false
+repository = "https://github.com/yusuffahrizal/YuxoTerm"
+homepage = "https://github.com/yusuffahrizal/YuxoTerm"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+portable-pty = "0.9"
+regex = "1"
+dirs = "6"
+trash = "5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

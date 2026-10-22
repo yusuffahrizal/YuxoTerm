@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "YuxoTerm",
+  "version": "0.1.0",
+  "identifier": "dev.yuxoterm.terminal",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "YuxoTerm",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 400,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "backgroundColor": "#16171d"
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: asset: http://asset.localhost",
+        "font-src": "'self' data: asset: http://asset.localhost",
+        "connect-src": "ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "base-uri": "'none'"
+      },
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$HOME/Library/Fonts/**",
+          "/Library/Fonts/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "category": "DeveloperTool",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.png"
+    ]
+  }
+}

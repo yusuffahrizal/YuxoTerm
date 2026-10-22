@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- YuxoTerm app icon. Geometry is in a 400×400 tile, scaled into macOS's 824 px icon grid. -->
+  <g transform="translate(100 100) scale(2.06)">
+    <rect width="400" height="400" rx="90" fill="#0e1116"/>
+    <path d="M106 89 L200 197 L294 89 M200 197 L200 274" fill="none" stroke="#f3f5f7"
+          stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="152" y="312" width="96" height="28" rx="7" fill="#5eead4"/>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+# Dependencies and generated files
+node_modules/
+ui/vendor/
+
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/gen/
+
+# OS and editor files
+.DS_Store
+*.log
+.idea/
+.vscode/
