@@ -58,6 +58,7 @@ fn main() {
             agents::agent_send,
             agents::agent_cancel,
             agents::agents_status,
+            agents::claude_models,
             agents::agent_interactive_command,
             agents::agent_tools_install,
             guard::get_guard,

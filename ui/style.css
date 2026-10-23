@@ -96,9 +96,11 @@ main { flex: 1; display: flex; min-height: 0; }
 .split.col { flex-direction: column; }
 .pane {
   flex: 1 1 0; min-width: 60px; min-height: 40px; position: relative;
-  padding: 6px 4px 4px 10px; background: var(--bg); overflow: hidden;
+  background: var(--bg); overflow: hidden;
 }
-.pane .xterm { height: 100%; }
+/* Padding lives on .xterm, not .pane: FitAddon subtracts only the terminal element's own padding,
+   so padding on the pane made it fit too many rows and clip the last line. */
+.pane .xterm { height: 100%; padding: 6px 4px 4px 10px; }
 .pane .xterm-viewport { background: transparent !important; }
 .tab-root.multi .pane:not(.focused)::after {
   content: ""; position: absolute; inset: 0; background: rgba(5, 8, 12, 0.32); pointer-events: none;
@@ -473,7 +475,7 @@ kbd { font-size: 10px; opacity: 0.7; margin-left: 4px; }
 }
 .pane-title-chip[hidden] { display: none; }
 /* Leave a strip for the badges so they never cover terminal output. */
-.pane.readonly, .pane.titled { padding-top: 28px; }
+.pane.readonly .xterm, .pane.titled .xterm { padding-top: 28px; }
 
 
 button:focus-visible, select:focus-visible, .effort-track:focus-visible { outline: 2px solid rgba(94, 234, 212, 0.55); outline-offset: 1px; }

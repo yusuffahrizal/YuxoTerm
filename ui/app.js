@@ -1,6 +1,6 @@
 // YuxoTerm UI: tabs → split panes (xterm.js on a Rust PTY) + Claude sidebar.
 import { t, applyI18n, setLanguage, setKeyLabeler, resolveLanguage, LANGUAGES, ruleName, ruleNameKey, locale } from "./i18n.js";
-import { AGENTS, agentInfo, createAdapter, FORMATS } from "./agents.js";
+import { AGENTS, agentInfo, canonModel, createAdapter, effortsFor, FORMATS, pickEffort, setClaudeModels } from "./agents.js";
 import { IS_MAC, matchShortcut, shortcutLabel, shortcutParts, shortcutRange } from "./keys.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -70,6 +70,9 @@ class Pane {
       macOptionIsMeta: true,
       scrollback: 10000,
       drawBoldTextInBrightColors: false,
+      // OSC 8 hyperlinks (what CLIs like Claude Code print for login URLs). xterm's default handler
+      // relies on confirm() and window.open(), neither of which works inside the webview.
+      linkHandler: { activate: (_, uri) => invoke("open_url", { url: uri }).catch(() => {}), allowNonHttpProtocols: false },
     });
     this.fit = new FitAddon.FitAddon();
     this.term.loadAddon(this.fit);
@@ -323,6 +326,8 @@ function makeDivider(dir) {
   return d;
 }
 
+const AUTH_ERROR = /\/login|not logged in|invalid api key|authentication[_ ]error|oauth|token (has )?expired|\b401\b/i;
+
 async function newTab(cwd, cmd, { activate = true } = {}) {
   const tab = new Tab();
   tabs.push(tab);
@@ -511,6 +516,7 @@ class Chat {
     const info = agentInfo(agent);
     this.sessionAgent = agent;
     this.runId = nextId("r");
+    this.sawResult = false;
     this.adapter = createAdapter(info.custom ? (config.agents?.custom?.format || "text") : info.format, {
       agentName: info.name, model, cwd, prefix: this.runId,
     });
@@ -658,13 +664,26 @@ class Chat {
     setStatus(t("status.thinking"));
   }
 
+  // Headless runs can't do OAuth, so an auth failure gets a button that finishes the login in a terminal tab.
+  appendError(text) {
+    const box = el("div", "error-box", text);
+    if ((this.sessionAgent ?? this.agent.agent) === "claude" && AUTH_ERROR.test(text)) {
+      const btn = el("button", "ghost-btn", t("chat.loginClaude"));
+      btn.style.cssText = "display:block;margin-top:8px";
+      btn.addEventListener("click", () => newTab(activeTabCwd(), "claude auth login"));
+      box.append(btn);
+    }
+    this.append(box);
+  }
+
   onResult(ev) {
+    this.sawResult = true;
     if (ev.session_id) this.sessionId = ev.session_id;
     const secs = ev.duration_ms ? `${(ev.duration_ms / 1000).toFixed(1)}s` : "";
     const cost = ev.total_cost_usd != null ? `$${ev.total_cost_usd.toFixed(4)}` : "";
     const turns = ev.num_turns ? (ev.num_turns === 1 ? t("chat.turn") : t("chat.turns", { n: ev.num_turns })) : "";
     const failed = ev.is_error || ev.subtype !== "success";
-    if (failed) this.append(el("div", "error-box", ev.result || t("chat.agentFailed")));
+    if (failed) this.appendError(ev.result || t("chat.agentFailed"));
     this.append(el("div", "meta result", [failed ? `✕ ${t("chat.failed")}` : `✓ ${t("chat.done")}`, secs, turns, cost].filter(Boolean).join(" · ")));
   }
 
@@ -678,7 +697,8 @@ class Chat {
     for (const card of this.tools.values()) {
       if (!card.classList.contains("ok") && !card.classList.contains("err")) card.classList.add("err");
     }
-    if (code !== 0 && code != null && stderr?.trim()) this.append(el("div", "error-box", stderr.trim()));
+    if (code !== 0 && code != null && stderr?.trim()) this.appendError(stderr.trim());
+    else if (code != null && !this.sawResult) this.appendError(t("chat.noResponse", { code }));
     else if (code == null) this.append(el("div", "meta", `⏹ ${t("chat.stopped")}`));
     this.setBusy(false);
   }
@@ -710,24 +730,41 @@ let agentStatus = [];
 
 const agentSettings = (id) => config.agents?.[id] ?? {};
 const isInstalled = (id) => id === "custom" ? !!agentSettings("custom").command?.trim() : !!agentStatus.find((s) => s.id === id)?.installed;
-const modelName = (agent, v) => (v ? agentInfo(agent).models.find((m) => m.value === v)?.name ?? v : t("agent.default"));
+const modelName = (agent, v) => (v ? agentInfo(agent).models.find((m) => m.value === canonModel(agent, v))?.name ?? v : t("agent.default"));
 const effortName = (v) => t(`effort.${v || "default"}`);
 const currentAgent = () => activeTab?.chat.agent;
 function agentDefaults(id = config.agent || "claude") {
   const s = agentSettings(id);
-  return { agent: id, model: s.model ?? "", effort: s.effort ?? "", thinking: s.thinking || "default" };
+  const info = agentInfo(id);
+  const model = canonModel(id, s.model) || info.defaultModel || "";
+  return {
+    agent: id,
+    model,
+    effort: pickEffort(id, model, s.effort),
+    thinking: s.thinking || "default",
+  };
+}
+
+// Claude's model list comes from the CLI itself; the built-in list stays if it can't be read.
+async function loadClaudeModels() {
+  const list = await invoke("claude_models").catch(() => null);
+  if (!setClaudeModels(list)) return;
+  for (const tab of tabs) {
+    if (!tab.chat.agentCustom) tab.chat.agent = agentDefaults();
+  }
 }
 
 async function refreshAgentStatus() {
-  agentStatus = await invoke("agents_status").catch(() => agentStatus);
+  const [status] = await Promise.all([invoke("agents_status").catch(() => agentStatus), loadClaudeModels()]);
+  agentStatus = status;
   updateAgentButton();
   return agentStatus;
 }
 
 function modelOptions(agent, current) {
   const info = agentInfo(agent);
-  const list = [{ value: "", name: t("agent.default"), desc: t("agent.defaultDescOf", { agent: info.name }) },
-    ...info.models.map((m) => ({ ...m, desc: t(m.descKey) }))];
+  const list = info.models.map((m) => ({ ...m, desc: m.desc ?? t(m.descKey) }));
+  if (!info.defaultModel) list.unshift({ value: "", name: t("agent.default"), desc: t("agent.defaultDescOf", { agent: info.name }) });
   for (const v of [agentSettings(agent).model, current]) {
     if (v && !list.some((m) => m.value === v)) list.push({ value: v, name: v, desc: t("agent.custom") });
   }
@@ -740,7 +777,7 @@ function updateAgentButton() {
   const info = agentInfo(a.agent);
   const parts = [info.short];
   if (a.model) parts.push(modelName(a.agent, a.model));
-  if (a.effort && info.efforts.length) parts.push(effortName(a.effort));
+  if (a.effort && effortsFor(a.agent, a.model).length) parts.push(effortName(a.effort));
   if (a.thinking === "on" && info.thinking) parts.push(t("agent.thinking"));
   $("#agent-label").textContent = parts.join(" · ");
   $("#sb-agent-name").textContent = info.short;
@@ -764,6 +801,8 @@ function setAgent(patch) {
     }
   }
   Object.assign(chat.agent, patch);
+  // A model change can drop the chosen effort level (not every model has every level).
+  chat.agent.effort = pickEffort(chat.agent.agent, chat.agent.model, chat.agent.effort);
   chat.agentCustom = true;
   updateAgentButton();
   if (chat.tab === activeTab) updateSidebarCwd();
@@ -794,7 +833,7 @@ function renderAgentMenu() {
   input.placeholder = t("agent.otherModel");
   input.value = "";
 
-  const levels = info.efforts;
+  const levels = effortsFor(a.agent, a.model);
   $("#am-effort-row").classList.toggle("hidden", !levels.length);
   if (levels.length) {
     const track = $("#am-effort");
@@ -820,10 +859,10 @@ function renderAgentMenu() {
 
 function setEffort(i) {
   const a = currentAgent();
-  const levels = agentInfo(a.agent).efforts;
+  const levels = effortsFor(a.agent, a.model);
   const next = levels[Math.min(levels.length - 1, Math.max(0, i))];
-  // Picking the current level again returns to the agent's default.
-  setAgent({ effort: a.effort === next ? "" : next });
+  // Picking the current level again returns to the agent's default (when it has no named default).
+  setAgent({ effort: a.effort === next && !agentInfo(a.agent).defaultEffort ? "" : next });
 }
 
 function openAgentMenu() {
@@ -877,10 +916,10 @@ function setupAgentMenu() {
     setEffort(best);
   });
   track.addEventListener("keydown", (e) => {
-    const levels = agentInfo(currentAgent().agent).efforts;
+    const levels = effortsFor(currentAgent().agent, currentAgent().model);
     const idx = levels.indexOf(currentAgent().effort);
     if (e.key === "ArrowRight") { e.preventDefault(); setAgent({ effort: levels[Math.min(levels.length - 1, idx + 1)] }); }
-    if (e.key === "ArrowLeft") { e.preventDefault(); setAgent({ effort: idx <= 0 ? "" : levels[idx - 1] }); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); setAgent({ effort: idx <= 0 && !agentInfo(currentAgent().agent).defaultEffort ? "" : levels[Math.max(0, idx - 1)] }); }
   });
 }
 
@@ -1770,11 +1809,12 @@ function renderDefaults({ keepCustomInput = false } = {}) {
   }));
 
   $("#def-model-title").textContent = t("defaults.modelFor", { agent: info.name });
+  const curModel = canonModel(id, s.model) || info.defaultModel || "";
   const opts = modelOptions(id, s.model).filter((m) => m.value === "" || info.models.some((x) => x.value === m.value));
   $("#def-models").replaceChildren(...opts.map((m) => {
-    const b = el("button", `model-opt${m.value === (s.model ?? "") ? " selected" : ""}`);
+    const b = el("button", `model-opt${m.value === curModel ? " selected" : ""}`);
     b.type = "button";
-    b.setAttribute("aria-pressed", String(m.value === (s.model ?? "")));
+    b.setAttribute("aria-pressed", String(m.value === curModel));
     b.append(el("span", "mo-name", m.name), el("span", "mo-desc", m.desc));
     b.addEventListener("click", () => { $("#def-custom-model").value = ""; setDefault({ model: m.value }); });
     return b;
@@ -1782,9 +1822,9 @@ function renderDefaults({ keepCustomInput = false } = {}) {
   $("#def-custom-desc").textContent = info.models.length ? "" : t("defaults.customModelDesc", { agent: info.name });
   if (!keepCustomInput) $("#def-custom-model").value = info.models.some((m) => m.value === s.model) ? "" : (s.model ?? "");
 
-  const levels = info.efforts;
+  const levels = effortsFor(id, curModel);
   $("#def-effort-row").classList.toggle("hidden", !levels.length);
-  renderSeg($("#def-effort"), ["", ...levels].map((v) => ({ value: v, label: effortName(v) })), levels.includes(s.effort) ? s.effort : "", (v) => setDefault({ effort: v }));
+  renderSeg($("#def-effort"), (info.defaultEffort ? levels : ["", ...levels]).map((v) => ({ value: v, label: effortName(v) })), pickEffort(id, curModel, s.effort), (v) => setDefault({ effort: v }));
   $("#def-thinking-row").classList.toggle("hidden", !info.thinking);
   renderSeg($("#def-thinking"), THINKING.map((v) => ({ value: v, label: t(`thinking.${v}`) })), s.thinking || "default", (v) => setDefault({ thinking: v }));
   $("#def-budget-row").classList.toggle("hidden", !(id === "claude" && s.thinking === "on"));

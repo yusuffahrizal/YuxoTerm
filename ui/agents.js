@@ -5,26 +5,70 @@
 // Each adapter turns another agent's output into that shape, so tool cards,
 // thinking blocks, history and resume work the same for every agent.
 
+// Fallback only: setClaudeModels() replaces it with the list Claude Code itself reports.
 const CLAUDE_MODELS = [
-  { value: "opus", name: "Opus 5.5", descKey: "model.opus" },
-  { value: "sonnet", name: "Sonnet 5.5", descKey: "model.sonnet" },
-  { value: "fable", name: "Fable 5.1", descKey: "model.fable" },
-  { value: "haiku", name: "Haiku 5.5", descKey: "model.haiku" },
+  { value: "claude-opus-5-5", name: "Opus 5.5", descKey: "model.opus" },
+  { value: "claude-sonnet-5-5", name: "Sonnet 5.5", descKey: "model.sonnet" },
+  { value: "claude-fable-5-1", name: "Fable 5.1", descKey: "model.fable" },
+  { value: "claude-haiku-5-5", name: "Haiku 5.5", descKey: "model.haiku" },
 ];
 
 // efforts: reasoning levels the agent accepts (subset of low…max).
+// defaultModel / defaultEffort: what the picker selects until the user chooses, so it always names a
+// concrete model and level instead of "Default" (omitted when the agent has no model list / levels).
 // thinking: whether the thinking toggle changes anything for this agent.
 export const AGENTS = [
-  { id: "claude", name: "Claude Code", short: "Claude", format: "claude", models: CLAUDE_MODELS, efforts: ["low", "medium", "high", "xhigh", "max"], thinking: true },
-  { id: "codex", name: "Codex", short: "Codex", format: "codex", models: [], efforts: ["low", "medium", "high", "xhigh"], thinking: true },
-  { id: "antigravity", name: "Antigravity", short: "Antigravity", format: "gemini", models: [], efforts: ["low", "medium", "high"], thinking: false },
+  { id: "claude", name: "Claude Code", short: "Claude", format: "claude", models: CLAUDE_MODELS, efforts: ["low", "medium", "high", "xhigh", "max"], thinking: true, defaultModel: "claude-sonnet-5-5", defaultEffort: "high" },
+  { id: "codex", name: "Codex", short: "Codex", format: "codex", models: [], efforts: ["low", "medium", "high", "xhigh"], thinking: true, defaultEffort: "medium" },
+  { id: "antigravity", name: "Antigravity", short: "Antigravity", format: "gemini", models: [], efforts: ["low", "medium", "high"], thinking: false, defaultEffort: "medium" },
   { id: "gemini", name: "Gemini CLI", short: "Gemini", format: "gemini", models: [], efforts: [], thinking: false },
   { id: "cursor", name: "Cursor Agent", short: "Cursor", format: "cursor", models: [], efforts: [], thinking: false },
-  { id: "opencode", name: "OpenCode", short: "OpenCode", format: "opencode", models: [], efforts: ["low", "medium", "high", "max"], thinking: true },
+  { id: "opencode", name: "OpenCode", short: "OpenCode", format: "opencode", models: [], efforts: ["low", "medium", "high", "max"], thinking: true, defaultEffort: "medium" },
   { id: "custom", name: "Custom agent", short: "Custom", format: "text", models: [], efforts: [], thinking: false, custom: true },
 ];
 
 export const agentInfo = (id) => AGENTS.find((a) => a.id === id) ?? AGENTS[0];
+
+// Replaces Claude's model list with what `claude` reports for this account (see `claude_models`
+// in agents.rs), so new releases appear without a code change. Models are stored by their full
+// resolved id, so an alias like "sonnet" can't drift to another version later.
+const modelAliases = {};
+export function setClaudeModels(list) {
+  const usable = (list ?? []).filter((m) => m?.value && m.displayName);
+  const models = usable.filter((m) => m.value !== "default").map((m) => ({
+    value: m.resolvedModel || m.value,
+    name: m.displayName,
+    desc: m.description,
+    efforts: m.supportsEffort ? m.supportedEffortLevels ?? [] : [],
+  }));
+  if (!models.length) return false;
+  const claude = agentInfo("claude");
+  for (const m of usable) modelAliases[m.value] = m.resolvedModel || m.value;
+  claude.models = models;
+  // The CLI's own recommended default for this account, shown as a concrete model.
+  const recommended = modelAliases.default;
+  claude.defaultModel = models.some((m) => m.value === recommended) ? recommended : models[0].value;
+  return true;
+}
+
+// Maps a stored alias ("sonnet") to the full model id; other values pass through.
+export const canonModel = (id, v) => (id === "claude" && v ? modelAliases[v] ?? v : v);
+
+// Reasoning levels for a model; the agent's own list when the model doesn't say.
+export function effortsFor(id, model) {
+  const info = agentInfo(id);
+  return info.models.find((m) => m.value === model)?.efforts ?? info.efforts;
+}
+
+// Keeps an effort valid for the model: "" stays "" only for agents without a named default.
+export function pickEffort(id, model, effort) {
+  const info = agentInfo(id);
+  const levels = effortsFor(id, model);
+  if (!levels.length) return "";
+  if (!effort && !info.defaultEffort) return "";
+  if (levels.includes(effort)) return effort;
+  return [info.defaultEffort, "high"].find((e) => levels.includes(e)) ?? levels[levels.length - 1];
+}
 
 // ---------------------------------------------------------------------------
 // Normalizer: emits Claude-shaped events from simple calls.

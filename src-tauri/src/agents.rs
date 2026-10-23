@@ -810,6 +810,65 @@ fn version_of(bin: &Path) -> Result<String, String> {
     }
 }
 
+/// Models Claude Code offers this account, read from its control protocol so new releases
+/// show up without a code change. Each entry carries `value`, `resolvedModel`, `displayName`,
+/// `description` and `supportedEffortLevels`.
+#[tauri::command]
+pub async fn claude_models() -> Result<Vec<Value>, String> {
+    tauri::async_runtime::spawn_blocking(fetch_claude_models)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn fetch_claude_models() -> Result<Vec<Value>, String> {
+    let cfg = config::load();
+    let spec = spec("claude")?;
+    let settings = cfg.agent(spec.id);
+    let bin = resolve_bin(spec, &settings)?;
+    let mut cmd = Command::new(&bin);
+    cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
+        .env("PATH", shellenv::login_path())
+        .current_dir(dirs::home_dir().unwrap_or_default())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    if !spec.key_env.is_empty() && !settings.api_key.trim().is_empty() {
+        cmd.env(spec.key_env, settings.api_key.trim());
+    }
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let init = json!({ "type": "control_request", "request_id": "yuxoterm-init", "request": { "subtype": "initialize" } });
+    writeln!(stdin, "{init}").map_err(|e| e.to_string())?;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if !line.contains("control_response") {
+                continue;
+            }
+            let models = serde_json::from_str::<Value>(&line)
+                .ok()
+                .and_then(|v| v.pointer("/response/response/models").and_then(Value::as_array).cloned());
+            if let Some(models) = models {
+                let _ = tx.send(models);
+                break;
+            }
+        }
+    });
+    let models = rx.recv_timeout(Duration::from_secs(20));
+    // Keep stdin open until we have the answer, then stop the process.
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    models.map_err(|_| {
+        tr(
+            "Couldn't read the model list from Claude Code.",
+            "Tidak dapat membaca daftar model dari Claude Code.",
+        )
+    })
+}
+
 /// Which agents are installed, with versions; checked in parallel off the UI thread.
 #[tauri::command]
 pub async fn agents_status() -> Vec<AgentStatus> {
