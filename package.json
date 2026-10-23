@@ -1,7 +1,7 @@
 {
   "name": "yuxoterm",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A lightweight, GPU-accelerated terminal for macOS with a built-in sidebar for coding agents (Claude Code, Codex, Gemini CLI, OpenCode and more).",
   "repository": {
     "type": "git",

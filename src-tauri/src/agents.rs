@@ -826,19 +826,27 @@ fn fetch_claude_models() -> Result<Vec<Value>, String> {
     let settings = cfg.agent(spec.id);
     let bin = resolve_bin(spec, &settings)?;
     let mut cmd = Command::new(&bin);
-    cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
-        .env("PATH", shellenv::login_path())
-        .current_dir(dirs::home_dir().unwrap_or_default())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.args([
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+    ])
+    .env("PATH", shellenv::login_path())
+    .current_dir(dirs::home_dir().unwrap_or_default())
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::null());
     if !spec.key_env.is_empty() && !settings.api_key.trim().is_empty() {
         cmd.env(spec.key_env, settings.api_key.trim());
     }
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
     let mut stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
-    let init = json!({ "type": "control_request", "request_id": "yuxoterm-init", "request": { "subtype": "initialize" } });
+    let init =
+        json!({ "type": "control_request", "request_id": "yuxoterm-init", "request": { "subtype": "initialize" } });
     writeln!(stdin, "{init}").map_err(|e| e.to_string())?;
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -847,9 +855,11 @@ fn fetch_claude_models() -> Result<Vec<Value>, String> {
             if !line.contains("control_response") {
                 continue;
             }
-            let models = serde_json::from_str::<Value>(&line)
-                .ok()
-                .and_then(|v| v.pointer("/response/response/models").and_then(Value::as_array).cloned());
+            let models = serde_json::from_str::<Value>(&line).ok().and_then(|v| {
+                v.pointer("/response/response/models")
+                    .and_then(Value::as_array)
+                    .cloned()
+            });
             if let Some(models) = models {
                 let _ = tx.send(models);
                 break;
