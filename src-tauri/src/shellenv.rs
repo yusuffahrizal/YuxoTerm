@@ -63,6 +63,34 @@ fn fallback_path() -> String {
     parts.join(":")
 }
 
+/// Shells listed in `/etc/shells` that exist on disk, for the "add profile" picker.
+#[tauri::command]
+pub fn shells_available() -> Vec<String> {
+    let text = std::fs::read_to_string("/etc/shells").unwrap_or_default();
+    parse_shells(&text)
+        .into_iter()
+        .filter(|s| is_executable(Path::new(s)))
+        .collect()
+}
+
+fn parse_shells(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('/') && !out.iter().any(|s| s == line) {
+            out.push(line.to_string());
+        }
+    }
+    out
+}
+
+/// Resolves a bare program name through the login PATH; paths and unknown names pass through.
+pub fn resolve_program(name: &str) -> String {
+    if name.contains('/') {
+        return name.to_string();
+    }
+    which(name).map_or_else(|| name.to_string(), |p| p.display().to_string())
+}
+
 /// Finds an executable by name on the login PATH.
 pub fn which(name: &str) -> Option<PathBuf> {
     login_path()
@@ -82,5 +110,25 @@ fn is_executable(p: &Path) -> bool {
     #[cfg(not(unix))]
     {
         p.is_file()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_etc_shells() {
+        let text = "# List of acceptable shells\n/bin/bash\n  /bin/zsh  \n/bin/bash\n\nnologin\n";
+        assert_eq!(parse_shells(text), ["/bin/bash", "/bin/zsh"]);
+    }
+
+    #[test]
+    fn explicit_paths_are_not_searched() {
+        assert_eq!(resolve_program("/opt/x/bin/tool"), "/opt/x/bin/tool");
+        assert_eq!(
+            resolve_program("definitely-not-installed-xyz"),
+            "definitely-not-installed-xyz"
+        );
     }
 }

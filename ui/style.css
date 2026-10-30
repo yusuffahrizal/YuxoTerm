@@ -73,12 +73,16 @@ code, pre, kbd { font-family: var(--mono); }
 .tab:hover .tab-close, .tab.active .tab-close { opacity: 1; }
 .tab .tab-close:hover { background: var(--border-strong); color: var(--text); }
 .tab .tab-count { font-size: 10px; color: var(--text-faint); }
+.tab .tab-kind { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.tab .tab-kind:empty { display: none; }
 
 .icon-btn {
   width: 28px; height: 28px; border: 0; background: none; border-radius: 6px;
   color: var(--text-dim); display: grid; place-items: center; font-size: 17px; flex: none;
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+/* The ⌄ next to + sits close to it, like a split button. */
+.icon-btn.small { width: 18px; margin-left: -4px; font-size: 13px; }
 .pill {
   height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid var(--border-strong);
   background: none; color: var(--text-dim); display: flex; align-items: center; gap: 6px; flex: none;
@@ -529,4 +533,18 @@ button:focus-visible, select:focus-visible, .effort-track:focus-visible { outlin
 .ctx-label { flex: 1; }
 .ctx-hint { color: var(--text-faint); font-size: 12px; margin-left: 18px; }
 .ctx-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+.ctx-heading { padding: 4px 10px 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.ctx-note { padding: 3px 10px; font-size: 11px; color: var(--text-faint); max-width: 260px; }
+.ctx-menu { max-height: calc(100vh - 60px); overflow-y: auto; }
+
+/* ---------- Settings → Profiles ---------- */
+.profiles-card { padding: 0; }
+.profile + .profile { border-top: 1px solid var(--border); }
+.profile-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.profile-names { flex: 1; min-width: 0; }
+.profile-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-detail { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-body { border-top: 1px solid var(--border); background: var(--bg-elev); }
+.profile-body .s-row { border-top: 0; }
+.ghost-btn.danger:hover { color: var(--red); }
 .pd-input { width: 100%; margin-top: 12px; }

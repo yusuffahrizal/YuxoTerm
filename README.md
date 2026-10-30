@@ -47,6 +47,7 @@ YuxoTerm puts your coding agent of choice — Claude Code, Codex, Gemini CLI, Op
 
 **Terminal**
 - GPU-accelerated rendering (xterm.js with WebGL) on a native Rust PTY backend
+- Profiles for new tabs: your login shell, any host from `~/.ssh/config`, or a custom command, with a default you choose
 - Tabs, plus split panes inside each tab (right, left, down and up), with draggable dividers, keyboard navigation and a right-click menu
 - Truecolor, clickable links, and your installed fonts, including Nerd Fonts for prompt icons
 - Small footprint: the app bundle is about 6 MB; it uses the system WebView instead of Electron
@@ -136,6 +137,7 @@ On macOS the shortcuts use ⌘. On other platforms plain `Ctrl+<key>` belongs to
 | Action | macOS | Linux |
 |---|---|---|
 | New tab / close tab | ⌘T / ⇧⌘W | Ctrl+Shift+T / Ctrl+Shift+Alt+W |
+| Choose a profile for a new tab | ⇧⌘T | Ctrl+Shift+Alt+T |
 | Split right / split down | ⌘D / ⇧⌘D | Ctrl+Shift+D / Ctrl+Shift+Alt+D |
 | Close pane | ⌘W | Ctrl+Shift+W |
 | Previous / next pane | ⌘[ / ⌘] | Ctrl+Shift+[ / ] |
@@ -150,6 +152,15 @@ On macOS the shortcuts use ⌘. On other platforms plain `Ctrl+<key>` belongs to
 | Clear pane | ⌘K | Ctrl+Shift+K |
 | Bigger / smaller / reset text | ⌘= / ⌘- / ⌘0 | Ctrl+Shift+= / - / 0 |
 | Settings | ⌘, | Ctrl+, |
+
+### Profiles and SSH
+
+Click **+** to open a tab with your default profile. Right-click **+**, or click the **⌄** next to it, to choose another one: your login shell, a host from `~/.ssh/config`, or a profile you made. Right-click a profile in that menu to make it the default; it is used by **+**, ⌘T and splits.
+
+- **SSH hosts** are read from `~/.ssh/config` (including `Include`d files; wildcard entries are skipped). The tab runs `ssh <host>`, so `ProxyJump`, `LocalForward`, keys and agents work as they do in any terminal. Passwords and passphrases are typed in the tab; YuxoTerm stores none.
+- **Profiles** (Settings → Profiles) add a shell with its own arguments, an SSH host with extra options such as `-p 2222`, or any command. Each can set a starting folder and environment variables.
+- When an SSH or command tab exits, the tab closes, like a shell does.
+- Agents always open local shells, whatever the default is, and treat an SSH tab as a running program rather than a shell prompt.
 
 ### Terminal context menu
 
@@ -202,7 +213,7 @@ The built-in rules block deleting the root or home folder, formatting disks, for
 
 | Path | Contents |
 |---|---|
-| `~/.config/yuxoterm/config.json` | App settings, including optional API keys (file mode 600) |
+| `~/.config/yuxoterm/config.json` | App settings, including profiles and optional API keys (file mode 600) |
 | `~/.config/yuxoterm/guard.json` | Command Guard rules |
 | `~/.config/yuxoterm/guard.log` | Guard decisions, one JSON object per line |
 | `~/.config/yuxoterm/history/<agent>/` | Conversations with agents other than Claude Code (Claude Code keeps its own in `~/.claude/projects/`) |
@@ -227,18 +238,21 @@ The folder is readable only by your user account. YuxoTerm changes files outside
 ```
 src-tauri/src/
   main.rs       App setup, native menu, and the --guard-hook / --mcp-server modes
-  pty.rs        One PTY and shell per pane: spawn, write, resize, cwd, foreground process
+  pty.rs        One PTY per pane: spawns a profile's shell, SSH or command; write, resize, cwd, foreground process
+  sshconfig.rs  Lists the hosts in ~/.ssh/config for the new-tab menu
   clipboard.rs  System clipboard read/write for the context menu and Ctrl+Shift+C/V
   agents.rs     Runs each agent headlessly: flags, resume, terminal tools, guard hook
   guard.rs      Command Guard rules, the pre-tool hook, the approval broker socket
   mcp.rs        Stdio MCP server for the terminal tools; forwards calls to the app
   history.rs    Lists, loads, records and deletes conversations
   config.rs     Settings file, UI language for backend messages, user font lookup
-  shellenv.rs   Login-shell PATH (apps opened from Finder don't inherit it)
+  shellenv.rs   Login-shell PATH (apps opened from Finder don't inherit it), installed shells
 ui/
   index.html    Markup
   style.css     Styles
   app.js        Tabs, panes, context menu, sidebar, history, settings, terminal tools
+  profiles.js   Profiles: the + menu entries and the Settings → Profiles panel
+  util.js       Small DOM and IPC helpers shared by the UI modules
   keys.js       Keyboard shortcuts per platform (⌘ on macOS, Ctrl+Shift elsewhere)
   agents.js     Agent list and output adapters
   i18n.js       English and Indonesian strings

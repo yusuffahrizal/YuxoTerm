@@ -2,20 +2,12 @@
 import { t, applyI18n, setLanguage, setKeyLabeler, resolveLanguage, LANGUAGES, ruleName, ruleNameKey, locale } from "./i18n.js";
 import { AGENTS, agentInfo, canonModel, createAdapter, effortsFor, FORMATS, pickEffort, setClaudeModels } from "./agents.js";
 import { IS_MAC, matchShortcut, shortcutLabel, shortcutParts, shortcutRange } from "./keys.js";
+import { $, basename, el, esc, invoke } from "./util.js";
+import { LOCAL, defaultProfile, profileMenuEntries, profileName, renderProfileSettings, resolveProfile } from "./profiles.js";
 
-const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const appWindow = window.__TAURI__.window.getCurrentWindow();
 
-const $ = (sel, root = document) => root.querySelector(sel);
-const el = (tag, cls, text) => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
-  return n;
-};
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const basename = (p) => (p ? p.replace(/\/+$/, "").split("/").pop() || "/" : "");
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -53,6 +45,8 @@ class Pane {
     this.readOnly = false;
     this.cwd = null;
     this.alive = false;
+    // The profile this pane was started from; set by start().
+    this.profile = null;
     // Badges in the corners of the pane: who is driving it, whether it is locked, its custom title.
     this.tagAgent = el("span", "tag tag-agent");
     this.tagReadOnly = el("span", "tag tag-ro");
@@ -113,7 +107,10 @@ class Pane {
     this.doFit();
   }
 
-  async start(cwd, initialCommand) {
+  async start(cwd, initialCommand, profileId) {
+    this.profile = resolveProfile(config, profileId ?? defaultProfile(config).id);
+    // Until the remote shell sets its own title, an SSH pane is named after its host.
+    if (this.profile.kind === "ssh") this.title = this.profile.ssh_host;
     this.term.open(this.el);
     this.term.textarea?.addEventListener("focus", () => this.tab.focusPane(this, false));
     try {
@@ -125,7 +122,7 @@ class Pane {
     this.cwd = cwd || null;
     this.ptyCols = this.term.cols;
     this.ptyRows = this.term.rows;
-    await invoke("pty_spawn", { id: this.id, cwd: cwd || null, cols: this.ptyCols, rows: this.ptyRows });
+    await invoke("pty_spawn", { id: this.id, cwd: cwd || null, cols: this.ptyCols, rows: this.ptyRows, profile: this.profile.id });
     this.alive = true;
     if (initialCommand) setTimeout(() => invoke("pty_write", { id: this.id, data: initialCommand + "\r" }), 350);
     this.refreshCwd();
@@ -188,7 +185,7 @@ class Tab {
     this.customTitle = "";
     this.chat = new Chat(this);
     this.header = el("div", "tab");
-    this.header.innerHTML = `<span class="tab-title"></span><span class="tab-count"></span><button class="tab-close" data-i18n-title="tab.close">×</button>`;
+    this.header.innerHTML = `<span class="tab-title"></span><span class="tab-kind"></span><span class="tab-count"></span><button class="tab-close" data-i18n-title="tab.close">×</button>`;
     applyI18n(this.header);
     this.header.addEventListener("mousedown", (e) => { if (!e.target.closest(".tab-close")) activateTab(this); });
     this.header.addEventListener("auxclick", (e) => { if (e.button === 1) closeTab(this); });
@@ -197,19 +194,19 @@ class Tab {
     $("#tabs").append(this.header);
   }
 
-  async addFirstPane(cwd, cmd) {
+  async addFirstPane(cwd, cmd, profile) {
     const pane = new Pane(this);
     this.root.append(pane.el);
     this.panes.push(pane);
     this.activePane = pane;
     this.renderHeader();
-    await pane.start(cwd, cmd);
+    await pane.start(cwd, cmd, profile);
     this.focusPane(pane);
   }
 
   // dir: "row" places the new pane right of `pane`, "col" places it below.
   // `before` puts the new pane left of / above `pane` instead of right of / below it.
-  async split(pane, dir, cmd, { cwd = null, focus = true, before = false } = {}) {
+  async split(pane, dir, cmd, { cwd = null, focus = true, before = false, profile } = {}) {
     cwd ||= (await invoke("pty_cwd", { id: pane.id }).catch(() => null)) || pane.cwd;
     const next = new Pane(this);
     const parent = pane.el.parentElement;
@@ -222,7 +219,7 @@ class Tab {
     else box.append(pane.el, makeDivider(dir), next.el);
     this.panes.splice(this.panes.indexOf(pane) + (before ? 0 : 1), 0, next);
     this.updateMulti();
-    await next.start(cwd, cmd);
+    await next.start(cwd, cmd, profile);
     if (focus) this.focusPane(next);
     return next;
   }
@@ -289,6 +286,8 @@ class Tab {
     const title = this.customTitle || (p && (p.customTitle || p.title || basename(p.cwd))) || t("tab.fallback");
     $(".tab-title", this.header).textContent = title;
     this.header.title = p?.cwd || title;
+    const kind = $(".tab-kind", this.header);
+    kind.textContent = p?.profile?.kind === "ssh" ? "ssh" : "";
     const count = $(".tab-count", this.header);
     count.textContent = this.panes.length > 1 ? `⧉${this.panes.length}` : "";
     count.title = t("tab.panes", { n: this.panes.length });
@@ -328,14 +327,34 @@ function makeDivider(dir) {
 
 const AUTH_ERROR = /\/login|not logged in|invalid api key|authentication[_ ]error|oauth|token (has )?expired|\b401\b/i;
 
-async function newTab(cwd, cmd, { activate = true } = {}) {
+// `profile` is a profile id; without one the tab uses the default profile. Programmatic opens
+// (agent tools, login, resumed chats) pass LOCAL because they expect a local shell.
+async function newTab(cwd, cmd, { activate = true, profile } = {}) {
   const tab = new Tab();
   tabs.push(tab);
   if (activate) activateTab(tab);
   else tab.root.classList.add("hidden");
-  await tab.addFirstPane(cwd ?? activeTabCwd(), cmd);
+  try {
+    await tab.addFirstPane(cwd ?? activeTabCwd(), cmd, profile);
+  } catch (e) {
+    // Don't leave a dead tab behind, and don't close the window if it was the only one.
+    // xterm has a render queued after open(); disposing it before that runs throws.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    closeTab(tab, { keepWindow: true });
+    throw e;
+  }
   if (!activate) activeTab?.activePane?.term.focus();
   return tab;
+}
+
+// User-initiated new tab: failures (missing ssh, bad command) are shown instead of thrown.
+async function openTab(profile) {
+  try {
+    await newTab(undefined, undefined, { profile });
+  } catch (e) {
+    toast(String(e?.message ?? e), "error");
+    if (!tabs.length) await newTab(null, undefined, { profile: LOCAL });
+  }
 }
 
 function activeTabCwd() {
@@ -359,7 +378,7 @@ function activateTab(tab) {
   });
 }
 
-function closeTab(tab) {
+function closeTab(tab, { keepWindow = false } = {}) {
   const i = tabs.indexOf(tab);
   if (i < 0) return;
   tab.chat.cancel();
@@ -368,7 +387,8 @@ function closeTab(tab) {
   tab.header.remove();
   tabs.splice(i, 1);
   if (!tabs.length) {
-    appWindow.close();
+    activeTab = null;
+    if (!keepWindow) appWindow.close();
     return;
   }
   if (activeTab === tab) activateTab(tabs[Math.min(i, tabs.length - 1)]);
@@ -670,7 +690,7 @@ class Chat {
     if ((this.sessionAgent ?? this.agent.agent) === "claude" && AUTH_ERROR.test(text)) {
       const btn = el("button", "ghost-btn", t("chat.loginClaude"));
       btn.style.cssText = "display:block;margin-top:8px";
-      btn.addEventListener("click", () => newTab(activeTabCwd(), "claude auth login"));
+      btn.addEventListener("click", () => newTab(activeTabCwd(), "claude auth login", { profile: LOCAL }));
       box.append(btn);
     }
     this.append(box);
@@ -1272,11 +1292,11 @@ const agentTools = {
 
   async open_pane(tab, { direction = "right", cwd, command }) {
     if (direction === "tab") {
-      const created = await newTab(cwd || tab.activePane?.cwd, command, { activate: false });
+      const created = await newTab(cwd || tab.activePane?.cwd, command, { activate: false, profile: LOCAL });
       return `Opened tab ${created.id} with pane ${created.activePane.id} in the background.`;
     }
     const base = tab.activePane;
-    const pane = await tab.split(base, direction === "down" ? "col" : "row", command, { cwd, focus: false });
+    const pane = await tab.split(base, direction === "down" ? "col" : "row", command, { cwd, focus: false, profile: LOCAL });
     if (command) await waitForCommand(pane, 1200, 8000);
     agentMark(pane);
     return `Opened pane ${pane.id} (${direction}).${command ? `\n${clip(screenTail(pane, 30))}` : ""}`;
@@ -1429,7 +1449,7 @@ async function openSession(id) {
   try {
     const session = await invoke("history_load", { id });
     // Keep the current conversation: open the old one in a new tab if this one is in use.
-    const target = chat.sessionId && chat.sessionId !== id ? (await newTab(session.cwd || null)).chat : chat;
+    const target = chat.sessionId && chat.sessionId !== id ? (await newTab(session.cwd || null, undefined, { profile: LOCAL })).chat : chat;
     target.loadSession(session);
     toggleHistory(false);
   } catch (e) {
@@ -1547,7 +1567,7 @@ const GUARD_ACTIONS = ["allow", "ask", "deny"];
 // [group, [[label key, [part lists…]], …]]: several part lists are shown as "a / b".
 const shortcutGroups = () => [
   ["keys.tabs", [
-    ["keys.newTab", [shortcutParts("newTab")]], ["keys.closePane", [shortcutParts("closePane")]], ["keys.closeTab", [shortcutParts("closeTab")]],
+    ["keys.newTab", [shortcutParts("newTab")]], ["keys.profileMenu", [shortcutParts("profileMenu")]], ["keys.closePane", [shortcutParts("closePane")]], ["keys.closeTab", [shortcutParts("closeTab")]],
     ["keys.splitRight", [shortcutParts("splitRight")]], ["keys.splitDown", [shortcutParts("splitDown")]],
     ["keys.prevNextPane", [shortcutParts("prevPane"), shortcutParts("nextPane")]],
     ["keys.paneDirection", [shortcutRange("paneLeft", "← ↑ → ↓")]],
@@ -1644,7 +1664,6 @@ function setupSettings() {
   for (const b of document.querySelectorAll(".stepper [data-step]")) {
     b.addEventListener("click", () => setFontSize(Number(fontSize.value) + Number(b.dataset.step)));
   }
-  onText($("#set-shell"), (v) => updateConfig({ shell: v.trim() }));
 
   // Agents
   $("#agents-refresh").addEventListener("click", () => { renderAgentList(true); refreshAgentStatus().then(() => { renderAgentList(); renderDefaults(); }); });
@@ -1736,7 +1755,6 @@ function fillSettings() {
   langSel.value = c.language || "system";
   $("#set-font-family").value = c.font_family;
   $("#set-font-size").value = c.font_size;
-  $("#set-shell").value = c.shell;
 
   const permSel = $("#set-permission");
   permSel.replaceChildren(...PERMISSION_MODES.map((m) => {
@@ -1759,6 +1777,17 @@ function fillSettings() {
     $("#guard-paths").textContent = `${info.guard_path}\n${info.log_path}\n${info.hook_command}`;
   });
   renderShortcuts();
+  renderProfiles();
+}
+
+// Hosts and shells are read from disk each time the panel is shown, so edits to
+// ~/.ssh/config appear without restarting.
+async function renderProfiles() {
+  const [hosts, shells] = await Promise.all([
+    invoke("ssh_hosts").catch(() => []),
+    invoke("shells_available").catch(() => []),
+  ]);
+  renderProfileSettings($("#profile-panel"), { config, hosts, shells, update: updateConfig, confirm: confirmDialog });
 }
 
 function renderPermissionNote() {
@@ -2180,7 +2209,8 @@ function setupKeys() {
       activateTab(tabNumber[1] === "9" ? tabs[tabs.length - 1] : tabs[Number(tabNumber[1]) - 1]);
     } else {
       switch (id) {
-        case "newTab": newTab(); break;
+        case "newTab": openTab(); break;
+        case "profileMenu": openProfileMenu(); break;
         case "closeTab": closeTab(tab); break;
         case "closePane": tab.closePane(pane); break;
         case "splitRight": tab.split(pane, "row"); break;
@@ -2241,9 +2271,15 @@ async function resetTerminal(pane) {
 }
 
 let ctxItems = [];
+// Which control opened the menu, and when it last closed: lets a second click on the
+// same button close the menu instead of closing it (mousedown) and reopening it (click).
+let ctxOwner = null;
+let ctxHiddenAt = 0;
 
 function hideContextMenu() {
-  $("#ctx-menu").classList.add("hidden");
+  const menu = $("#ctx-menu");
+  if (!menu.classList.contains("hidden")) ctxHiddenAt = performance.now();
+  menu.classList.add("hidden");
   ctxItems = [];
 }
 
@@ -2270,19 +2306,32 @@ function showContextMenu(pane, x, y) {
     { label: t("ctx.changeTerminalTitle"), run: () => renamePane(pane) },
   ].filter(Boolean);
 
+  showMenu(entries, x, y, { restoreFocus: () => pane.term.focus() });
+}
+
+/**
+ * Shows the shared popup menu. An entry is "-" (separator), { heading }, { note }, or an item:
+ * { label, hint, disabled, checked, run, alt }. `alt` runs on right-click or ⌥-click instead of `run`.
+ */
+function showMenu(entries, x, y, { restoreFocus, owner = null, focusFirst = false } = {}) {
   const menu = $("#ctx-menu");
   menu.replaceChildren();
   ctxItems = [];
-  const checkable = entries.some((en) => en !== "-" && "checked" in en);
+  ctxOwner = owner;
+  const checkable = entries.some((en) => typeof en === "object" && "checked" in en);
   for (const en of entries) {
     if (en === "-") { menu.append(el("div", "ctx-sep")); continue; }
+    if (en.heading) { menu.append(el("div", "ctx-heading", en.heading)); continue; }
+    if (en.note) { menu.append(el("div", "ctx-note", en.note)); continue; }
     const b = el("button", "ctx-item");
     b.type = "button";
     b.setAttribute("role", "menuitem");
     b.disabled = !!en.disabled;
     if (checkable) b.append(el("span", "ctx-check", en.checked ? "✓" : ""));
     b.append(el("span", "ctx-label", en.label), el("span", "ctx-hint", en.hint ?? ""));
-    b.addEventListener("click", () => { hideContextMenu(); en.run(); if (!$("#prompt-dialog").offsetParent) pane.term.focus(); });
+    const choose = (fn) => { hideContextMenu(); fn(); if (!$("#prompt-dialog").offsetParent) restoreFocus?.(); };
+    b.addEventListener("click", (e) => choose(e.altKey && en.alt ? en.alt : en.run));
+    if (en.alt) b.addEventListener("contextmenu", (e) => { e.preventDefault(); choose(en.alt); });
     menu.append(b);
     if (!en.disabled) ctxItems.push(b);
   }
@@ -2291,6 +2340,25 @@ function showContextMenu(pane, x, y) {
   const r = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(6, Math.min(x, window.innerWidth - r.width - 6))}px`;
   menu.style.top = `${Math.max(6, Math.min(y, window.innerHeight - r.height - 6))}px`;
+  if (focusFirst) ctxItems[0]?.focus();
+}
+
+// The `+` menu: pick what the new tab runs, or make a profile the default.
+async function openProfileMenu({ toggle = false } = {}) {
+  if (toggle && ctxOwner === "tabs" && performance.now() - ctxHiddenAt < 300) return;
+  const hosts = await invoke("ssh_hosts").catch(() => []);
+  const anchor = $("#new-tab").getBoundingClientRect();
+  const entries = profileMenuEntries({
+    config,
+    hosts,
+    onOpen: (id) => openTab(id),
+    onSetDefault: (p) => {
+      updateConfig({ default_profile: p.id });
+      toast(t("profile.nowDefault", { name: profileName(p) }), "ok", 2500);
+    },
+    onManage: () => openSettings("profiles"),
+  });
+  showMenu(entries, anchor.left, anchor.bottom + 4, { owner: "tabs", focusFirst: true, restoreFocus: () => activeTab?.activePane?.term.focus() });
 }
 
 function setupContextMenu() {
@@ -2303,6 +2371,7 @@ function setupContextMenu() {
       if (pane) showContextMenu(pane, e.clientX, e.clientY);
       return;
     }
+    if (e.target.closest("#new-tab, #tab-menu")) { e.preventDefault(); openProfileMenu(); return; }
     hideContextMenu();
     // Keep the system menu for text fields and selected text; hide the WebView's own (Reload…).
     const editable = e.target.closest("input, textarea, [contenteditable]");
@@ -2408,7 +2477,8 @@ async function main() {
   await listen("agent-done", (e) => runs.get(e.payload.run_id)?.onDone(e.payload));
   await listen("menu", (e) => { if (e.payload === "settings") openSettings(); });
 
-  $("#new-tab").addEventListener("click", () => newTab());
+  $("#new-tab").addEventListener("click", () => openTab());
+  $("#tab-menu").addEventListener("click", () => openProfileMenu({ toggle: true }));
   setupSidebar();
   setupGuardAsk();
   setupHistory();
@@ -2420,7 +2490,11 @@ async function main() {
   setupContextMenu();
   setupKeys();
   window.addEventListener("resize", () => activeTab?.panes.forEach((p) => p.doFit()));
-  await newTab(null);
+  await newTab(null).catch(async (e) => {
+    // A default profile that can't start (say an SSH host that went away) must not leave an empty window.
+    toast(String(e?.message ?? e), "error");
+    await newTab(null, undefined, { profile: LOCAL });
+  });
   refreshAgentStatus();
 }
 

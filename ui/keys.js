@@ -10,6 +10,7 @@ export const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.use
 // id: [macCombo, otherCombo]. A null combo means the platform handles it natively.
 const BINDINGS = {
   newTab: ["Meta+KeyT", "Ctrl+Shift+KeyT"],
+  profileMenu: ["Meta+Shift+KeyT", "Ctrl+Shift+Alt+KeyT"],
   closePane: ["Meta+KeyW", "Ctrl+Shift+KeyW"],
   closeTab: ["Meta+Shift+KeyW", "Ctrl+Shift+Alt+KeyW"],
   splitRight: ["Meta+KeyD", "Ctrl+Shift+KeyD"],

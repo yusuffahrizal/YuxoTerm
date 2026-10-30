@@ -13,6 +13,7 @@
       <div class="traffic-space" data-tauri-drag-region></div>
       <div id="tabs"></div>
       <button id="new-tab" class="icon-btn" data-i18n-title="tab.new">+</button>
+      <button id="tab-menu" class="icon-btn small" data-i18n-title="tab.profiles" aria-haspopup="menu">⌄</button>
       <div class="spacer" data-tauri-drag-region></div>
       <button id="toggle-ai" class="pill" data-i18n-title="titlebar.claude"><span class="spark">✦</span> <span data-i18n="titlebar.agent"></span></button>
       <button id="open-settings" class="icon-btn" data-i18n-title="titlebar.settings">
@@ -82,6 +83,7 @@
       <nav class="settings-nav">
         <div class="settings-title" id="settings-heading" data-i18n="settings.title"></div>
         <button data-section="general" class="active"><span class="nav-ico">⚙︎</span><span data-i18n="nav.general"></span></button>
+        <button data-section="profiles"><span class="nav-ico">▸</span><span data-i18n="nav.profiles"></span></button>
         <button data-section="agents"><span class="nav-ico spark">✦</span><span data-i18n="nav.agents"></span></button>
         <button data-section="defaults"><span class="nav-ico">◎</span><span data-i18n="nav.defaults"></span></button>
         <button data-section="guard"><span class="nav-ico">⛨</span><span data-i18n="nav.guard"></span></button>
@@ -117,12 +119,14 @@
                   <div class="s-label"><div data-i18n="general.fontSize"></div><div class="s-desc" data-i18n="general.fontSizeDesc"></div></div>
                   <div class="s-control"><div class="stepper"><button data-step="-1">−</button><input id="set-font-size" type="number" min="8" max="32" /><button data-step="1">+</button></div></div>
                 </div>
-                <div class="s-row">
-                  <div class="s-label"><div data-i18n="general.shell"></div><div class="s-desc" data-i18n="general.shellDesc"></div></div>
-                  <div class="s-control wide"><input id="set-shell" spellcheck="false" data-i18n-placeholder="general.shellPlaceholder" /></div>
-                </div>
               </div>
             </div>
+          </section>
+
+          <!-- Profiles -->
+          <section data-panel="profiles" data-title="profile.title" class="hidden">
+            <p class="s-intro" data-i18n="profile.intro"></p>
+            <div id="profile-panel"></div>
           </section>
 
           <!-- Agents -->

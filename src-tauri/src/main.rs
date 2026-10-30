@@ -8,6 +8,7 @@ mod history;
 mod mcp;
 mod pty;
 mod shellenv;
+mod sshconfig;
 
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -53,6 +54,8 @@ fn main() {
             pty::pty_kill,
             pty::pty_cwd,
             pty::pty_foreground,
+            sshconfig::ssh_hosts,
+            shellenv::shells_available,
             clipboard::clipboard_read,
             clipboard::clipboard_write,
             agents::agent_send,
