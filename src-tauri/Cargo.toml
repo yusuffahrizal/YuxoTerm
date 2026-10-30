@@ -1,6 +1,6 @@
 [package]
 name = "yuxoterm"
-version = "0.1.1"
+version = "0.2.0"
 description = "A lightweight, GPU-accelerated terminal with a built-in sidebar for coding agents"
 edition = "2021"
 license = "MIT"

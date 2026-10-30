@@ -4,7 +4,7 @@ Thanks for your interest in improving YuxoTerm. This guide covers how to set up 
 
 ## Development setup
 
-You need macOS, the [Rust](https://rustup.rs) stable toolchain with Clippy, the Xcode Command Line Tools, and Node.js 18 or later.
+You need the [Rust](https://rustup.rs) stable toolchain with Clippy and Node.js 18 or later, plus the Xcode Command Line Tools on macOS. On Debian, Ubuntu and derivatives, `scripts/build-linux.sh --install-deps --deps-only` installs the system packages Tauri needs (WebKitGTK 4.1, GTK 3…).
 
 ```bash
 npm install
@@ -65,9 +65,9 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a ve
 1. Set the new version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, then run `cargo build` once so `Cargo.lock` updates.
 2. Commit the change and push it to `main`; wait for CI to pass.
 3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
-4. The workflow checks that the tag matches the three versions, builds Apple silicon and Intel `.dmg` files, and creates a **draft** release. Review it, edit the notes, and publish.
+4. The workflow checks that the tag matches the three versions, builds Apple silicon and Intel `.dmg` files and a 64-bit `.deb` (on Ubuntu 22.04, so it also installs on newer Ubuntu and Debian 12), and creates a **draft** release. Review it, edit the notes, and publish.
 
-Release files are named `YuxoTerm_aarch64.dmg` and `YuxoTerm_x64.dmg` (no version), so the download links in the README (`releases/latest/download/…`) keep working. These links only see normal releases: GitHub's "latest release" skips drafts and pre-releases. Tags with a hyphen, such as `v0.3.0-beta.1`, are published as pre-releases; plain tags such as `v0.3.0` are normal releases.
+Release files are named `YuxoTerm_aarch64.dmg`, `YuxoTerm_x64.dmg` and `YuxoTerm_amd64.deb` (no version), so the download links in the README (`releases/latest/download/…`) keep working. These links only see normal releases: GitHub's "latest release" skips drafts and pre-releases. Tags with a hyphen, such as `v0.3.0-beta.1`, are published as pre-releases; plain tags such as `v0.3.0` are normal releases.
 
 Builds are ad-hoc signed but not notarized; notarization needs an Apple Developer account and can be added to the workflow later.
 

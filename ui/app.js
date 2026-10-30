@@ -2458,6 +2458,8 @@ async function preloadFonts() {
 
 async function main() {
   setKeyLabeler(shortcutLabel);
+  // Only macOS draws its window buttons over our title bar; elsewhere the system title bar sits above it.
+  if (!IS_MAC) $(".traffic-space")?.remove();
   config = await invoke("get_config");
   applyLanguage();
   await preloadFonts();

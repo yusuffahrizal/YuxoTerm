@@ -1,6 +1,7 @@
 name: Release
 
-# Push a tag such as v0.1.0 to build the app and create a draft GitHub Release.
+# Push a tag such as v0.1.0 to build the app and create a draft GitHub Release:
+# .dmg for macOS (Apple silicon and Intel) and .deb for Debian, Ubuntu and derivatives.
 on:
   push:
     tags: ["v*"]
@@ -33,12 +34,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # `asset` is the architecture in the download file name (YuxoTerm_<asset>.dmg).
-          - target: aarch64-apple-darwin # Apple silicon
+          # `asset` is the architecture in the download file name (YuxoTerm_<asset>.<ext>).
+          - os: macos-latest
+            target: aarch64-apple-darwin # Apple silicon
             asset: aarch64
-          - target: x86_64-apple-darwin # Intel
+            bundles: dmg
+          - os: macos-latest
+            target: x86_64-apple-darwin # Intel
             asset: x64
-    runs-on: macos-latest
+            bundles: dmg
+          # Built on the oldest supported Ubuntu so the .deb also installs on newer releases
+          # and on Debian 12 (older glibc, WebKitGTK 4.1).
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset: amd64
+            bundles: deb
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +67,10 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.target }}
 
+      - name: Install Linux build packages
+        if: runner.os == 'Linux'
+        run: bash scripts/build-linux.sh --deps-only
+
       - name: Install dependencies
         run: npm ci
 
@@ -71,11 +86,13 @@ jobs:
           releaseBody: |
             See the [README](https://github.com/yusuffahrizal/YuxoTerm#install) for installation steps.
 
-            This build is not notarized by Apple. On first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+            **macOS:** this build is not notarized by Apple. On first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+
+            **Debian, Ubuntu and derivatives (22.04 / Debian 12 or newer):** `sudo apt install ./YuxoTerm_amd64.deb`
           releaseDraft: true
           # Only tags like v0.2.0-beta.1 are pre-releases. GitHub's "latest release" link and the
           # README download buttons skip pre-releases, so normal versions must not be marked as one.
           prerelease: ${{ contains(github.ref_name, '-') }}
-          # Version-less file names keep releases/latest/download/YuxoTerm_<arch>.dmg valid forever.
+          # Version-less file names keep releases/latest/download/YuxoTerm_<arch>.<ext> valid forever.
           releaseAssetNamePattern: YuxoTerm_${{ matrix.asset }}[ext]
-          args: --target ${{ matrix.target }} --bundles dmg
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}

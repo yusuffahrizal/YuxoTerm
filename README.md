@@ -18,6 +18,8 @@
   &nbsp;·&nbsp;
   <a href="https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_x64.dmg"><b>⬇ Download for Intel</b></a>
   &nbsp;·&nbsp;
+  <a href="https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_amd64.deb"><b>⬇ Download for Debian / Ubuntu</b></a>
+  &nbsp;·&nbsp;
   <a href="https://github.com/yusuffahrizal/YuxoTerm/releases">All releases</a>
 </p>
 
@@ -90,23 +92,49 @@ Notes:
 
 ## Install
 
-1. Download the `.dmg` for your Mac from the [latest release](https://github.com/yusuffahrizal/YuxoTerm/releases/latest):
+Pick your system, then [sign in to at least one supported agent](#supported-agents). All downloads are on the [latest release](https://github.com/yusuffahrizal/YuxoTerm/releases/latest) page.
+
+### macOS
+
+1. Download the `.dmg` for your Mac:
    [**Apple silicon**](https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_aarch64.dmg) (M1 or later) or
    [**Intel**](https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_x64.dmg).
    Not sure which one? Choose **Apple menu → About This Mac**: "Chip: Apple M…" means Apple silicon, "Processor: Intel…" means Intel.
 2. Open the `.dmg` and drag **YuxoTerm** into **Applications**.
-3. Install and sign in to at least one [supported agent](#supported-agents).
-
-YuxoTerm is not yet notarized by Apple, so macOS blocks the first launch. To open it:
-
-- Open **System Settings → Privacy & Security**, scroll to the message about YuxoTerm, and choose **Open Anyway**; or
-- Run `xattr -dr com.apple.quarantine /Applications/YuxoTerm.app` in a terminal.
+3. YuxoTerm is not yet notarized by Apple, so macOS blocks the first launch. To open it, either:
+   - open **System Settings → Privacy & Security**, scroll to the message about YuxoTerm, and choose **Open Anyway**; or
+   - run `xattr -dr com.apple.quarantine /Applications/YuxoTerm.app` in a terminal.
 
 You only need to do this once per download. If you prefer not to run an unsigned build, [build it from source](#build-from-source).
 
+### Debian, Ubuntu and derivatives
+
+Needs Debian 12 / Ubuntu 22.04 or newer (64-bit Intel/AMD), because the app uses WebKitGTK 4.1. Derivatives of those releases, such as Linux Mint 21+ and Pop!_OS 22.04+, should work too.
+
+1. Download the [`.deb`](https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_amd64.deb) from the release page, or from a terminal:
+
+   ```bash
+   curl -fLO https://github.com/yusuffahrizal/YuxoTerm/releases/latest/download/YuxoTerm_amd64.deb
+   ```
+
+2. Install it. apt also pulls in WebKitGTK and a clipboard tool (`xclip` or `wl-clipboard`):
+
+   ```bash
+   sudo apt install ./YuxoTerm_amd64.deb
+   ```
+
+   Keep the `./` in front of the file name: without it apt looks for a package of that name in its repositories instead of installing the file.
+3. Start YuxoTerm from your application menu, or run `yuxoterm` in a terminal.
+
+To update, download the newer `.deb` and install it the same way. To remove the app: `sudo apt remove yuxo-term` (the package is named `yuxo-term`). For another architecture, [build it from source](#build-from-source).
+
+### Windows
+
+Not supported yet; see [Platform support](#platform-support).
+
 ## Build from source
 
-You need a recent version of macOS, [Rust](https://rustup.rs) (stable) with the Xcode Command Line Tools, [Node.js](https://nodejs.org) 18 or later, and at least one supported agent.
+You need [Rust](https://rustup.rs) (stable), [Node.js](https://nodejs.org) 18 or later, and at least one supported agent. On macOS, also the Xcode Command Line Tools.
 
 ```bash
 git clone https://github.com/yusuffahrizal/YuxoTerm.git
@@ -117,6 +145,23 @@ npm run build    # build YuxoTerm.app (and a .dmg) in src-tauri/target/release/b
 ```
 
 `npm run vendor` copies the xterm.js files from `node_modules` into `ui/vendor/`. The `dev` and `build` scripts run it for you.
+
+**On Debian, Ubuntu and derivatives** (22.04 / Debian 12 or newer), a script installs the build packages and builds the `.deb`. Install Node.js 18+ first; the apt version is usually too old.
+
+```bash
+scripts/build-linux.sh --install-deps   # apt packages + Rust if missing, then builds
+scripts/build-linux.sh                  # later builds, once the packages are installed
+```
+
+To install the build packages yourself instead:
+
+```bash
+sudo apt update
+sudo apt install build-essential curl wget file pkg-config libssl-dev \
+  libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+The package ends up in `src-tauri/target/release/bundle/deb/`. Install it with `sudo apt install ./<file>.deb`.
 
 ## Using YuxoTerm
 
@@ -230,8 +275,9 @@ The folder is readable only by your user account. YuxoTerm changes files outside
 |---|---|
 | macOS on Apple silicon | Supported and tested |
 | macOS on Intel | Should work; untested |
-| Linux | Builds, and shortcuts and the clipboard are implemented for it, but it is untested |
-| Windows | Not supported (agent integration relies on Unix sockets) |
+| Debian, Ubuntu and derivatives (64-bit) | `.deb` built by CI and by `scripts/build-linux.sh`. Install and launch were checked on Ubuntu 22.04 in a container; not yet tried by hand on a desktop |
+| Other Linux | Builds from source; no package |
+| Windows | Not supported yet (agent integration relies on Unix sockets) |
 
 ## Project structure
 
@@ -258,6 +304,7 @@ ui/
   i18n.js       English and Indonesian strings
 scripts/
   vendor.mjs    Copies xterm.js into ui/vendor
+  build-linux.sh  Installs the build packages and builds the .deb on Debian-family Linux
 ```
 
 ## Contributing

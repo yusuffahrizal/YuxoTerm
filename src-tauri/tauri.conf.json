@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "YuxoTerm",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "identifier": "dev.yuxoterm.terminal",
   "build": {
     "frontendDist": "../ui"
@@ -58,6 +58,13 @@
     ],
     "macOS": {
       "signingIdentity": "-"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "xclip | wl-clipboard"
+        ]
+      }
     },
     "shortDescription": "Terminal with a built-in sidebar for coding agents"
   }
